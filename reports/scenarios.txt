@@ -1,0 +1,43 @@
+Testovací scénáře pro první nákup na alza.cz
+
+Happy Path:
+1. Registrace nového uživatele s platnou emailovou adresou, heslem a osobními údaji.
+2. Přihlášení nového uživatele.
+3. Vyhledání vybraného produktu pomocí vyhledávacího pole.
+4. Výběr produktu z výsledků vyhledávání.
+5. Přidání produktu do košíku.
+6. Zobrazení košíku a ověření správného produktu a ceny.
+7. Výběr způsobu doručení (např. doručení domů).
+8. Výběr způsobu platby (např. platba kartou online).
+9. Zadání dodacích a fakturačních údajů.
+10. Ověření souhrnu objednávky.
+11. Potvrzení a odeslání objednávky.
+12. Obdržení potvrzovacího emailu s detaily objednávky.
+13. Kontrola stavu objednávky v uživatelském účtu.
+14. Přijetí a převzetí zásilky.
+
+Edge Cases:
+1. Registrace s emailovou adresou obsahující speciální znaky.
+2. Vyhledání velmi specifického nebo málo dostupného produktu.
+3. Přidání více kusů produktu do košíku.
+4. Změna adresy doručení během nákupního procesu.
+5. Použití slevového kódu nebo dárkového voucheru.
+6. Pokus o objednávku produktu označeného jako „skladem do 14 dní“.
+7. Při zadávání dat ve formuláři použití velmi dlouhých textových hodnot.
+8. Přihlášení pomocí sociálních sítí (pokud dostupné).
+9. Pokus o nákup při výpadku platby kartou (např. neplatná karta).
+10. Vyplnění formuláře s různými formáty telefonního čísla.
+
+Negative Testy:
+1. Registrace s neplatnou / chybějící emailovou adresou.
+2. Přihlášení se špatným heslem.
+3. Vyhledání produktu s nesmyslným / prázdným výrazem.
+4. Přidání produktu do košíku bez výběru varianty (je-li vyžadováno).
+5. Zadání neplatných dodacích nebo fakturačních údajů (např. neexistující ulice).
+6. Pokus o nákup s nevyplněnými povinnými poli.
+7. Zadání chybných údajů k platbě (rozbitá nebo neplatná karta).
+8. Pokus o použití již použitého slevového kódu.
+9. Odstranění produktu z košíku před dokončením objednávky.
+10. Odstavení internetového připojení během dokončování objednávky.
+
+Tyto scénáře pokrývají běžné i neobvyklé situace, které mohou nastat při prvním nákupu na alza.cz, přičemž zajišťují kvalitní ověření funkcionality a uživatelské zkušenosti.
