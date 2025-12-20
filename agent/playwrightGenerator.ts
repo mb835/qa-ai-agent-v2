@@ -1,59 +1,63 @@
-import fs from "fs";
-import path from "path";
+export type ActionType =
+  | 'goto'
+  | 'fill'
+  | 'click'
+  | 'expectVisible'
+  | 'pause';
 
-/**
- * Vstupní typ – backend VYNUTÍ strukturu
- */
-export type Scenario = {
-  tag: "HAPPY" | "EDGE" | "NEGATIVE" | "SECURITY";
-  title: string;
-  steps: string[];
+export type Step = {
+  action: ActionType;
+  url?: string;
+  selector?: string;
+  value?: string;
+  force?: boolean;
 };
 
-/**
- * Překlad jednoho scénáře do Playwright testu
- */
-function generatePlaywrightTest(scenario: Scenario): string {
-  const testName = `[${scenario.tag}] ${scenario.title}`;
-
-  const steps = scenario.steps
-    .map((step, index) => {
-      return `    // ${index + 1}. ${step}`;
-    })
-    .join("\n");
-
-  return `
-import { test, expect } from "@playwright/test";
-
-test("${testName}", async ({ page }) => {
-${steps}
-
-    // TODO: map steps → Playwright actions
-});
-`.trim();
+function ts(value?: string) {
+  return value ? `"${value.replace(/"/g, '\\"')}"` : '""';
 }
 
-/**
- * Uloží každý scénář jako samostatný .spec.ts soubor
- */
-export function generatePlaywrightFiles(scenarios: Scenario[]) {
-  const baseDir = path.resolve("playwright/tests");
+export function generatePlaywrightTest(steps: Step[]): string {
+  const lines: string[] = [];
 
-  if (!fs.existsSync(baseDir)) {
-    fs.mkdirSync(baseDir, { recursive: true });
+  lines.push(`import { test, expect } from '@playwright/test';`);
+  lines.push(``);
+  lines.push(`test('Generated test', async ({ page }) => {`);
+
+  for (const step of steps) {
+    switch (step.action) {
+      case 'goto':
+        lines.push(
+          `  await page.goto(${ts(step.url)}, { waitUntil: 'domcontentloaded' });`
+        );
+        break;
+
+      case 'fill':
+        lines.push(`  await page.waitForSelector(${ts(step.selector)});`);
+        lines.push(
+          `  await page.fill(${ts(step.selector)}, ${ts(step.value)});`
+        );
+        break;
+
+      case 'click':
+        lines.push(`  await page.waitForSelector(${ts(step.selector)});`);
+        lines.push(
+          `  await page.click(${ts(step.selector)}, { force: true });`
+        );
+        break;
+
+      case 'expectVisible':
+        lines.push(
+          `  await expect(page.locator(${ts(step.selector)})).toBeVisible();`
+        );
+        break;
+
+      case 'pause':
+        lines.push(`  await page.pause();`);
+        break;
+    }
   }
 
-  scenarios.forEach((scenario) => {
-    const fileSafeName =
-      scenario.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-
-    const fileName = `${scenario.tag.toLowerCase()}-${fileSafeName}.spec.ts`;
-    const filePath = path.join(baseDir, fileName);
-
-    const content = generatePlaywrightTest(scenario);
-    fs.writeFileSync(filePath, content, "utf-8");
-  });
+  lines.push(`});`);
+  return lines.join('\n');
 }

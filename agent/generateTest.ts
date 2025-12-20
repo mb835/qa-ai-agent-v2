@@ -1,12 +1,17 @@
-import { openai } from './aiClient.ts';
+import fs from 'fs';
+import path from 'path';
+import { generatePlaywrightTest } from './playwrightGenerator';
+import { resolveTemplate } from './resolveTemplate';
 
-export async function generateTest(prompt: string) {
-  const r = await openai.chat.completions.create({
-    model: 'gpt-4.1-mini',
-    messages: [
-      { role: 'system', content: 'Vracíš pouze Playwright test v TypeScriptu.' },
-      { role: 'user', content: prompt }
-    ]
-  });
-  return r.choices[0].message.content;
-}
+const intent = 'Vyhledat notebook na Alze a přidat do košíku';
+
+const steps = resolveTemplate(intent);
+const testCode = generatePlaywrightTest(steps);
+
+const outputDir = path.resolve('tests/generated');
+fs.mkdirSync(outputDir, { recursive: true });
+
+const outputFile = path.join(outputDir, 'alza-add-to-cart.spec.ts');
+fs.writeFileSync(outputFile, testCode);
+
+console.log(`✅ Alza test generated: ${outputFile}`);

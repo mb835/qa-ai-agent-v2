@@ -1,71 +1,163 @@
-import { useState } from "react";
+import { useState } from 'react';
 
-type Step = {
-  action: string;
-  url?: string;
-  selector?: string;
-  value?: string;
-};
+type ScenarioType = 'acceptance' | 'negative' | 'security';
+type Action = 'scenario' | 'skeleton' | 'run';
 
-type Scenario = {
-  type: string;
-  name: string;
-  steps: Step[];
-};
+export default function Scenarios() {
+  const [type, setType] = useState<ScenarioType>('acceptance');
+  const [action, setAction] = useState<Action>('scenario');
 
-export default function Scenare() {
-  const [intent, setIntent] = useState("");
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [scenario, setScenario] = useState<any>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function generate() {
-    setError(null);
+  async function generateScenario() {
+    setLoading(true);
+    setScenario(null);
+    setCode(null);
+    setTestResult(null);
 
-    const res = await fetch("http://localhost:3000/scenarios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ intent })
+    const res = await fetch('http://localhost:3000/api/scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Udělej nákup notebooku',
+        type
+      })
     });
 
     const data = await res.json();
+    setScenario(data);
+    setLoading(false);
+  }
 
-    if (!res.ok) {
-      setError(data.error || "Chyba generování");
-      return;
-    }
+  async function generatePlaywright() {
+    if (!scenario) return;
 
-    setScenarios(data.scenarios);
+    setLoading(true);
+    setCode(null);
+    setTestResult(null);
+
+    const res = await fetch('http://localhost:3000/api/playwright', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario })
+    });
+
+    const data = await res.json();
+    setCode(data.code);
+    setLoading(false);
+  }
+
+  async function runTest() {
+    setLoading(true);
+    setTestResult(null);
+
+    const res = await fetch('http://localhost:3000/api/run-test', {
+      method: 'POST'
+    });
+
+    const data = await res.json();
+    setTestResult(data);
+    setLoading(false);
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 32, maxWidth: 1000 }}>
       <h1>QA AI Agent – Scénáře</h1>
 
-      <textarea
-        value={intent}
-        onChange={(e) => setIntent(e.target.value)}
-        placeholder="Zadej testovací záměr"
-        style={{ width: "100%", height: 100 }}
-      />
+      {/* SCREEN 1 – CO CHCI DĚLAT */}
+      <h3>Co chceš udělat</h3>
+      <label>
+        <input
+          type="radio"
+          checked={action === 'scenario'}
+          onChange={() => setAction('scenario')}
+        />
+        Vygenerovat scénář
+      </label>
+      <br />
+      <label>
+        <input
+          type="radio"
+          checked={action === 'skeleton'}
+          onChange={() => setAction('skeleton')}
+        />
+        Vygenerovat Playwright skeleton
+      </label>
+      <br />
+      <label>
+        <input
+          type="radio"
+          checked={action === 'run'}
+          onChange={() => setAction('run')}
+        />
+        Spustit test
+      </label>
 
-      <button onClick={generate} style={{ marginTop: 12 }}>
-        Generovat scénáře
-      </button>
+      {/* SCENARIO TYPE */}
+      <h3 style={{ marginTop: 24 }}>Typ scénáře</h3>
+      <select value={type} onChange={(e) => setType(e.target.value as ScenarioType)}>
+        <option value="acceptance">Akceptační</option>
+        <option value="negative">Negativní</option>
+        <option value="security">Bezpečnostní</option>
+      </select>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {/* ACTION BUTTONS */}
+      <div style={{ marginTop: 24 }}>
+        {action === 'scenario' && (
+          <button onClick={generateScenario} disabled={loading}>
+            Generovat scénář
+          </button>
+        )}
 
-      {scenarios.map((s, i) => (
-        <div key={i} style={{ marginTop: 24 }}>
-          <h2>[{s.type}] {s.name}</h2>
-          <ol>
-            {s.steps.map((step, j) => (
-              <li key={j}>
-                <code>{JSON.stringify(step)}</code>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ))}
+        {action === 'skeleton' && scenario && (
+          <button onClick={generatePlaywright} disabled={loading}>
+            Vygenerovat Playwright skeleton
+          </button>
+        )}
+
+        {action === 'run' && (
+          <button onClick={runTest} disabled={loading}>
+            Spustit test (debug)
+          </button>
+        )}
+      </div>
+
+      <p style={{ marginTop: 16, opacity: 0.7 }}>
+        ℹ️ Test se spouští v debug režimu. Prohlížeč zůstane otevřený
+        a test se zastaví na <code>page.pause()</code>.
+      </p>
+
+      {loading && <p>⏳ Pracuji…</p>}
+
+      {scenario && (
+        <>
+          <h2>Scénář</h2>
+          <pre>{JSON.stringify(scenario, null, 2)}</pre>
+        </>
+      )}
+
+      {code && (
+        <>
+          <h2>Playwright skeleton</h2>
+          <pre>{code}</pre>
+        </>
+      )}
+
+      {testResult && (
+        <>
+          <h2>Výsledek testu</h2>
+          <p>
+            Status:{' '}
+            <strong style={{ color: testResult.status === 'passed' ? 'green' : 'red' }}>
+              {testResult.status}
+            </strong>
+          </p>
+          <pre>{testResult.output}</pre>
+        </>
+      )}
     </div>
   );
 }

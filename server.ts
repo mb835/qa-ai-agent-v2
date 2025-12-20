@@ -1,30 +1,35 @@
-import "dotenv/config"; // ⬅️ MUSÍ být úplně nahoře
-
-import express from "express";
-import cors from "cors";
-import { generateScenarios } from "./agent/scenarioEngine";
+import express from 'express';
+import { spawn } from 'child_process';
+import cors from 'cors';
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-app.post("/scenarios", async (req, res) => {
-  try {
-    const { intent } = req.body;
+app.get('/health', (_, res) => {
+  res.json({ status: 'ok' });
+});
 
-    if (!intent || typeof intent !== "string") {
-      return res.status(400).json({ error: "Invalid intent" });
+app.post('/api/tests/run', (req, res) => {
+  const { testFile } = req.body;
+
+  const pw = spawn(
+    'npx',
+    ['playwright', 'test', testFile],
+    {
+      shell: true,
+      env: {
+        ...process.env, // ❗ důležité – žádný debug
+      },
     }
+  );
 
-    const result = await generateScenarios(intent);
-    res.json(result);
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+  pw.stdout.on('data', d => console.log(d.toString()));
+  pw.stderr.on('data', d => console.error(d.toString()));
+
+  res.json({ status: 'started' });
 });
 
 app.listen(3000, () => {
-  console.log("✅ Backend running on http://localhost:3000");
+  console.log('Backend running on http://localhost:3000');
 });
