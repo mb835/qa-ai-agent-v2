@@ -1,0 +1,14 @@
+{
+  "scenarios": [
+    {
+      "type": "HAPPY",
+      "name": "Otevření Seznam registrace",
+      "steps": [
+        {
+          "action": "goto",
+          "url": "https://registrace.seznam.cz"
+        }
+      ]
+    }
+  ]
+}

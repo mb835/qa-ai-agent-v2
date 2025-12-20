@@ -1,42 +1,71 @@
-
 import { useState } from "react";
 
-export default function Scenare() {
-  const [text, setText] = useState("");
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+type Step = {
+  action: string;
+  url?: string;
+  selector?: string;
+  value?: string;
+};
 
-  async function run() {
-    setLoading(true);
-    const res = await fetch("http://localhost:3000/api/scenarios", {
+type Scenario = {
+  type: string;
+  name: string;
+  steps: Step[];
+};
+
+export default function Scenare() {
+  const [intent, setIntent] = useState("");
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    setError(null);
+
+    const res = await fetch("http://localhost:3000/scenarios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: text })
+      body: JSON.stringify({ intent })
     });
-    const json = await res.json();
-    setData(json);
-    setLoading(false);
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Chyba generování");
+      return;
+    }
+
+    setScenarios(data.scenarios);
   }
 
   return (
-    <div>
-      <textarea value={text} onChange={e => setText(e.target.value)} />
-      <button onClick={run}>Spustit AI</button>
+    <div style={{ padding: 24 }}>
+      <h1>QA AI Agent – Scénáře</h1>
 
-      {loading && <p>⏳ AI analyzuje…</p>}
+      <textarea
+        value={intent}
+        onChange={(e) => setIntent(e.target.value)}
+        placeholder="Zadej testovací záměr"
+        style={{ width: "100%", height: 100 }}
+      />
 
-      {data && (
-        <>
-          <h3>Happy Path</h3>
-          <ul>{data.happyPath.map((s:any,i:number)=><li key={i}>{s}</li>)}</ul>
+      <button onClick={generate} style={{ marginTop: 12 }}>
+        Generovat scénáře
+      </button>
 
-          <h3>Edge Cases</h3>
-          <ul>{data.edgeCases.map((s:any,i:number)=><li key={i}>{s}</li>)}</ul>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-          <h3>Negativní scénáře</h3>
-          <ul>{data.negativeScenarios.map((s:any,i:number)=><li key={i}>{s}</li>)}</ul>
-        </>
-      )}
+      {scenarios.map((s, i) => (
+        <div key={i} style={{ marginTop: 24 }}>
+          <h2>[{s.type}] {s.name}</h2>
+          <ol>
+            {s.steps.map((step, j) => (
+              <li key={j}>
+                <code>{JSON.stringify(step)}</code>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
     </div>
   );
 }
