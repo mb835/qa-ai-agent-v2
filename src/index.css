@@ -1,0 +1,17 @@
+@import "tailwindcss/preflight";
+@tailwind utilities;
+
+/* základní reset */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* základní styl */
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  background-color: #f3f4f6;
+}
