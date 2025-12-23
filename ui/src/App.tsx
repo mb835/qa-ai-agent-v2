@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Shell from "./layout/Shell";
-import DashboardPage from "./dashboard/DashboardPage";
-import TestScenariosPage from "./pages/TestScenariospage";
+import DashboardPage from "./pages/DashboardPage";
+import TestScenariosPage from "./pages/TestScenariosPage";
 
 export default function App() {
   return (

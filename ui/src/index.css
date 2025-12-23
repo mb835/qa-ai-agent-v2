@@ -3,11 +3,10 @@
 @tailwind utilities;
 
 /* ===== DESIGN TOKENS ===== */
-
 :root {
   --bg: #0b1220;
   --panel: #0f172a;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255,255,255,0.08);
 
   --primary: #4f46e5;
   --primary-hover: #6366f1;
