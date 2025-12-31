@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { spawn } from "child_process";
 import OpenAI from "openai";
 
 dotenv.config();
@@ -10,9 +9,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* =========================
-   OPENAI CLIENT
-   ========================= */
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -25,7 +21,7 @@ app.get("/health", (_, res) => {
 });
 
 /* =========================
-   AI – GENERATE TEST SCENARIO
+   AI – GENERATE QA ANALYSIS
    ========================= */
 app.post("/api/scenarios", async (req, res) => {
   const { intent } = req.body;
@@ -38,45 +34,58 @@ app.post("/api/scenarios", async (req, res) => {
 
   try {
     const prompt = `
-Jsi senior QA automation expert (enterprise level, rok 2027).
+Jsi senior QA automation architekt (enterprise úroveň, rok 2027).
+Používáš VÝHRADNĚ Playwright.
 
-DŮLEŽITÉ TECHNICKÉ OMEZENÍ:
-- Projekt používá VÝHRADNĚ Playwright
-- Selenium, Cypress ani jiné frameworky NESMÍŠ použít
-- Veškerá doporučení musí být:
-  - Playwright-first
-  - TypeScript-oriented
-  - vhodná pro E2E testy moderních webových aplikací
+UŽIVATEL zadává pouze TESTOVACÍ ZÁMĚR.
+Tvým cílem je vytvořit PROFESIONÁLNÍ QA ANALÝZU VHODNOU DO PORTFOLIA.
 
-PRAVIDLA:
-- Odpovídej POUZE validním JSONem
-- Žádný text mimo JSON
-- Piš česky
-- Buď strukturovaný, konzistentní, realistický
-- Test case musí být reálně použitelný v praxi
-- Nepoužívej Selenium, Cypress ani jiné nástroje – pouze Playwright
+VYTVOŘ:
+1️⃣ PŘESNĚ JEDEN HLAVNÍ ACCEPTANCE TEST CASE
+   - business-kritický happy path
+   - reprezentuje, zda systém generuje hodnotu
+   - musí být kompletní a samostatný
 
-VRAŤ PŘESNĚ TUTO STRUKTURU:
+2️⃣ 5–6 DALŠÍCH TEST CASE
+   - typy: NEGATIVE, EDGE, SECURITY, UX, DATA
+   - nejsou acceptance
+   - rozšiřují pokrytí rizik
+
+EXPERT QA INSIGHT MUSÍ OBSAHOVAT:
+- hluboké vysvětlení, PROČ je tento acceptance test klíčový
+- jasný business kontext
+- konkrétní rizika
+- praktická Playwright doporučení (E2E pohled)
+
+VRAŤ POUZE VALIDNÍ JSON VE STRUKTUŘE:
 
 {
   "testCase": {
-    "id": "TC_UNIQUE_ID",
-    "title": "Krátký výstižný název",
-    "description": "Co test ověřuje",
+    "id": "TC-ACC-001",
+    "title": "Krátký výstižný název acceptance testu",
+    "description": "Popis hlavního business scénáře",
     "preconditions": string[],
     "steps": string[],
-    "expectedResult": "Očekávaný výsledek",
-    "priority": "High | Medium | Low",
-    "notes": string,
+    "expectedResult": "string",
+    "priority": "High",
+    "notes": "",
     "expert": {
-      "reasoning": "Proč jsou tyto kroky zvoleny",
+      "reasoning": "Detailní QA vysvětlení business významu testu",
       "coverage": {
         "covers": string[],
         "doesNotCover": string[]
       },
       "risks": string[],
       "automationTips": string[]
-    }
+    },
+    "additionalTestCases": [
+      {
+        "id": "neg-1",
+        "type": "NEGATIVE",
+        "title": "Název testu",
+        "description": "Krátký popis rizika nebo odchylky"
+      }
+    ]
   }
 }
 
@@ -86,12 +95,13 @@ TESTOVACÍ ZÁMĚR:
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.2,
+      temperature: 0.25,
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "Jsi přísný senior QA automation architekt. Dodržuj striktně Playwright-only přístup.",
+            "Jsi přísný senior QA architekt. Vrať POUZE JSON. Žádný jiný text.",
         },
         {
           role: "user",
@@ -100,51 +110,63 @@ TESTOVACÍ ZÁMĚR:
       ],
     });
 
-    const raw = completion.choices[0]?.message?.content;
+    const content = completion.choices[0].message.content;
 
-    if (!raw) {
-      throw new Error("AI nevrátila žádnou odpověď.");
+    if (!content) {
+      throw new Error("AI nevrátila žádný obsah.");
     }
 
-    // 🔒 Backend = zdroj pravdy
-    const parsed = JSON.parse(raw);
-
-    if (!parsed.testCase || !parsed.testCase.expert) {
-      throw new Error("Neplatná struktura test case.");
-    }
-
-    res.json(parsed);
+    res.json(JSON.parse(content));
   } catch (error: any) {
-    console.error("AI ERROR:", error.message);
+    console.error("AI ERROR:", error);
 
     res.status(500).json({
-      error: "Chyba při generování testovacího scénáře.",
+      error: "Chyba při generování QA analýzy",
       details: error.message,
     });
   }
 });
 
 /* =========================
-   PLAYWRIGHT – RUN TESTS
+   AI – GENERATE STEPS FOR ADDITIONAL TEST CASE
    ========================= */
-app.post("/api/tests/run", (req, res) => {
-  const { testFile } = req.body;
+app.post("/api/scenarios/additional/steps", async (req, res) => {
+  const { additionalTestCase } = req.body;
 
-  if (!testFile) {
-    return res.status(400).json({ error: "Chybí testFile." });
+  try {
+    const prompt = `
+Jsi senior QA automation expert.
+Používáš pouze Playwright.
+
+VYGENERUJ DETAILNÍ TESTOVACÍ KROKY PRO:
+Typ: ${additionalTestCase.type}
+Název: ${additionalTestCase.title}
+Popis: ${additionalTestCase.description}
+
+VRAŤ POUZE JSON:
+{
+  "steps": string[],
+  "expectedResult": "string"
+}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = completion.choices[0].message.content;
+
+    if (!content) {
+      throw new Error("AI nevrátila žádný obsah.");
+    }
+
+    res.json(JSON.parse(content));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
-
-  const pw = spawn("npx", ["playwright", "test", testFile], {
-    shell: true,
-    env: {
-      ...process.env,
-    },
-  });
-
-  pw.stdout.on("data", (d) => console.log(d.toString()));
-  pw.stderr.on("data", (d) => console.error(d.toString()));
-
-  res.json({ status: "started" });
 });
 
 /* =========================

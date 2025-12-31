@@ -1,19 +1,40 @@
+import { useEffect, useState } from "react";
+
 type Props = {
   text?: string;
 };
 
+const PHASES = [
+  { text: "Analyzuji testovací záměr", progress: 20 },
+  { text: "Navrhuji acceptance test", progress: 45 },
+  { text: "Odvozuji další testovací případy", progress: 70 },
+  { text: "Vyhodnocuji rizika a pokrytí", progress: 90 },
+  { text: "Finalizuji QA analýzu", progress: 100 },
+];
+
 export default function LoadingOverlay({
-  text = "Generuji testovací scénář…",
+  text = "Probíhá QA analýza…",
 }: Props) {
+  const [phaseIndex, setPhaseIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhaseIndex((prev) =>
+        prev < PHASES.length - 1 ? prev + 1 : prev
+      );
+    }, 900);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const phase = PHASES[phaseIndex];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md">
       <div className="flex flex-col items-center gap-8">
         {/* AI ORBIT */}
         <div className="relative w-28 h-28">
-          {/* CORE */}
           <div className="absolute inset-0 rounded-full ai-core" />
-
-          {/* ORBIT */}
           <div className="absolute inset-0 ai-orbit">
             <div className="ai-dot" />
           </div>
@@ -29,8 +50,20 @@ export default function LoadingOverlay({
             {text}
           </div>
 
-          <div className="text-xs text-slate-500">
-            Analyzuji záměr → Generuji scénář → Validuji strukturu
+          <div className="text-xs text-slate-400 mb-3">
+            {phase.text}
+          </div>
+
+          {/* PROGRESS BAR */}
+          <div className="w-full h-1 rounded bg-slate-800 overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 transition-all duration-700"
+              style={{ width: `${phase.progress}%` }}
+            />
+          </div>
+
+          <div className="text-[10px] text-slate-500 mt-1">
+            {phase.progress} %
           </div>
         </div>
       </div>

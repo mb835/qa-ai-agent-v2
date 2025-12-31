@@ -5,8 +5,6 @@ import {
   FaListOl,
   FaExclamationTriangle,
   FaLightbulb,
-  FaChevronDown,
-  FaChevronRight,
 } from "react-icons/fa";
 
 import { generateScenario } from "../api/scenariosApi";
@@ -17,7 +15,9 @@ export default function TestScenariosPage() {
   const [intent, setIntent] = useState("");
   const [scenario, setScenario] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [showAdditional, setShowAdditional] = useState(false);
+
+  const [loadingAdditionalId, setLoadingAdditionalId] = useState<string | null>(null);
+  const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
 
   async function handleGenerate() {
     if (!intent.trim()) return;
@@ -26,12 +26,37 @@ export default function TestScenariosPage() {
       setLoading(true);
       const data = await generateScenario(intent);
       setScenario(data.testCase);
-      setShowAdditional(false);
-    } catch (e) {
-      console.error(e);
+      setAdditionalDetails({});
+    } catch {
       alert("Chyba při generování QA analýzy");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAdditionalDetail(tc: any) {
+    if (additionalDetails[tc.id] || loadingAdditionalId) return;
+
+    try {
+      setLoadingAdditionalId(tc.id);
+
+      const res = await fetch(
+        "http://localhost:3000/api/scenarios/additional/steps",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ additionalTestCase: tc }),
+        }
+      );
+
+      const data = await res.json();
+
+      setAdditionalDetails((prev) => ({
+        ...prev,
+        [tc.id]: data,
+      }));
+    } finally {
+      setLoadingAdditionalId(null);
     }
   }
 
@@ -42,31 +67,28 @@ export default function TestScenariosPage() {
       <div className="max-w-7xl mx-auto">
         {/* INPUT */}
         <div className="mb-8 space-y-4">
-          <label className="block text-sm text-slate-300">
-            Testovací záměr
-          </label>
+          <label className="block text-sm text-slate-300">Testovací záměr</label>
 
           <textarea
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
             rows={4}
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3"
           />
 
           <div className="flex justify-end">
             <button
               onClick={handleGenerate}
-              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition"
+              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
             >
               Spustit QA analýzu
             </button>
           </div>
         </div>
 
-        {/* SCENARIO */}
         {scenario && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            {/* LEFT – ACCEPTANCE */}
+            {/* LEFT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 relative">
               <div className="absolute top-4 right-4">
                 <AiGeneratedBadge />
@@ -82,86 +104,94 @@ export default function TestScenariosPage() {
               </p>
 
               {/* Preconditions */}
-              <div className="mb-6">
-                <h3 className="font-semibold flex items-center gap-2 mb-2">
-                  <FaCheckCircle className="text-green-400" />
-                  Předpoklady
-                </h3>
-                <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                  {scenario.preconditions.map((p: string, i: number) => (
-                    <li key={i}>{p}</li>
-                  ))}
-                </ul>
-              </div>
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
+                <FaCheckCircle className="text-green-400" />
+                Předpoklady
+              </h3>
+
+              <ul className="list-disc list-inside text-sm text-slate-300 mb-6">
+                {scenario.preconditions.map((p: string, i: number) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
 
               {/* Steps */}
-              <div className="mb-6">
-                <h3 className="font-semibold flex items-center gap-2 mb-2">
-                  <FaListOl />
-                  Kroky testu (Acceptance / Happy Path)
-                </h3>
-                <ol className="list-decimal list-inside text-sm text-slate-300 space-y-1">
-                  {scenario.steps.map((s: string, i: number) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ol>
-              </div>
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
+                <FaListOl />
+                Kroky testu (Acceptance / Happy Path)
+              </h3>
 
-              {/* Expected */}
-              <div>
-                <h3 className="font-semibold flex items-center gap-2 mb-2">
-                  <FaCheckCircle className="text-green-400" />
-                  Očekávaný výsledek
-                </h3>
-                <p className="text-sm text-slate-300">
-                  {scenario.expectedResult}
-                </p>
-                <p className="text-xs text-slate-500 mt-2">
-                  Priorita: {scenario.priority}
-                </p>
-              </div>
+              {/* ⬇️ TADY JE FIX – UI řeší číslování */}
+              <ol className="list-decimal list-inside text-sm text-slate-300 mb-6 space-y-1">
+                {scenario.steps.map((s: string, i: number) => (
+                  <li key={i}>{s.replace(/^\d+[\.\)]\s*/, "")}</li>
+                ))}
+              </ol>
 
-              {/* ADDITIONAL TEST CASES */}
-              {scenario.additionalTestCases?.length > 0 && (
-                <div className="mt-8 border-t border-slate-800 pt-4">
-                  <button
-                    onClick={() => setShowAdditional(!showAdditional)}
-                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition"
+              <p className="text-sm text-slate-300 mb-6">
+                <strong>Očekávaný výsledek:</strong>{" "}
+                {scenario.expectedResult}
+              </p>
+
+              {/* ADDITIONAL */}
+              <h3 className="font-semibold mt-8 mb-3">
+                Další testovací případy
+              </h3>
+
+              <ul className="space-y-3">
+                {scenario.additionalTestCases.map((tc: any) => (
+                  <li
+                    key={tc.id}
+                    onClick={() => loadAdditionalDetail(tc)}
+                    className="cursor-pointer rounded-lg border border-slate-800 bg-slate-950 p-4 hover:border-indigo-500 transition"
                   >
-                    {showAdditional ? <FaChevronDown /> : <FaChevronRight />}
-                    Další testovací případy ({scenario.additionalTestCases.length})
-                  </button>
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold">
+                        {tc.type} – {tc.title}
+                      </div>
 
-                  {showAdditional && (
-                    <ul className="mt-4 space-y-3 text-sm">
-                      {scenario.additionalTestCases.map((tc: any) => (
-                        <li
-                          key={tc.id}
-                          className="rounded-lg border border-slate-800 bg-slate-950 p-3"
-                        >
-                          <div className="font-semibold">
-                            {tc.type} – {tc.title}
-                          </div>
-                          <div className="text-slate-400 text-xs mt-1">
-                            {tc.description}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
+                      {loadingAdditionalId === tc.id && (
+                        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+
+                    <div className="text-xs text-slate-400 mt-1">
+                      {tc.description}
+                    </div>
+
+                    {additionalDetails[tc.id] && (
+                      <div className="mt-4 text-sm text-slate-300 border-t border-slate-800 pt-4">
+                        {/* 🔥 implicitní předpoklady */}
+                        <div className="mb-3 text-xs text-slate-400">
+                          <strong>Předpoklady:</strong> Uživatel je na relevantní
+                          stránce aplikace a má potřebná oprávnění.
+                        </div>
+
+                        {/* ⬇️ číslované kroky */}
+                        <ol className="list-decimal list-inside space-y-1">
+                          {additionalDetails[tc.id].steps.map(
+                            (s: string, i: number) => (
+                              <li key={i}>{s}</li>
+                            )
+                          )}
+                        </ol>
+
+                        <p className="mt-3 text-xs text-slate-400">
+                          {additionalDetails[tc.id].expectedResult}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            {/* RIGHT – EXPERT QA INSIGHT */}
+            {/* RIGHT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
-              <h3 className="font-semibold flex items-center gap-2 mb-1">
+              <h3 className="font-semibold flex items-center gap-2 mb-3">
                 <FaLightbulb className="text-yellow-400" />
                 Expert QA Insight
               </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Odborné QA vyhodnocení a doporučení založené na testovacím záměru
-              </p>
 
               <p className="text-sm text-slate-300 mb-4">
                 {scenario.expert.reasoning}
@@ -171,11 +201,9 @@ export default function TestScenariosPage() {
                 Coverage (Acceptance Scope)
               </h4>
               <ul className="list-disc list-inside text-sm text-green-400 mb-4">
-                {scenario.expert.coverage.covers.map(
-                  (c: string, i: number) => (
-                    <li key={i}>{c}</li>
-                  )
-                )}
+                {scenario.expert.coverage.covers.map((c: string, i: number) => (
+                  <li key={i}>{c}</li>
+                ))}
               </ul>
 
               <h4 className="font-semibold flex items-center gap-2 mb-1">
@@ -183,13 +211,8 @@ export default function TestScenariosPage() {
                 Rizika
               </h4>
               <ul className="list-disc list-inside text-sm text-slate-300 mb-4">
-                {scenario.expert.coverage.doesNotCover.map(
-                  (r: string, i: number) => (
-                    <li key={`nc-${i}`}>{r}</li>
-                  )
-                )}
                 {scenario.expert.risks.map((r: string, i: number) => (
-                  <li key={`risk-${i}`}>{r}</li>
+                  <li key={i}>{r}</li>
                 ))}
               </ul>
 
@@ -197,11 +220,9 @@ export default function TestScenariosPage() {
                 Automation Tips (Playwright)
               </h4>
               <ul className="list-disc list-inside text-sm text-slate-300">
-                {scenario.expert.automationTips.map(
-                  (t: string, i: number) => (
-                    <li key={i}>{t}</li>
-                  )
-                )}
+                {scenario.expert.automationTips.map((t: string, i: number) => (
+                  <li key={i}>{t}</li>
+                ))}
               </ul>
             </div>
           </div>
