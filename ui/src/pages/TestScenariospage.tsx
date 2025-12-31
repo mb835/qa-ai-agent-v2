@@ -5,9 +5,14 @@ import {
   FaListOl,
   FaExclamationTriangle,
   FaLightbulb,
+  FaChevronDown,
+  FaChevronRight,
+  FaSpinner,
+  FaRobot,
+  FaShieldAlt,
 } from "react-icons/fa";
 
-import { generateScenario } from "../api/scenariosApi";
+import { generateScenario, generateAdditionalSteps } from "../api/scenariosApi";
 import AiGeneratedBadge from "../components/AiGeneratedBadge";
 import LoadingOverlay from "../components/LoadingOverlay";
 
@@ -15,9 +20,9 @@ export default function TestScenariosPage() {
   const [intent, setIntent] = useState("");
   const [scenario, setScenario] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [showAdditional, setShowAdditional] = useState(false);
 
   const [loadingAdditionalId, setLoadingAdditionalId] = useState<string | null>(null);
-  const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
 
   async function handleGenerate() {
     if (!intent.trim()) return;
@@ -26,34 +31,27 @@ export default function TestScenariosPage() {
       setLoading(true);
       const data = await generateScenario(intent);
       setScenario(data.testCase);
-      setAdditionalDetails({});
-    } catch {
+      setShowAdditional(false);
+    } catch (e) {
       alert("Chyba při generování QA analýzy");
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadAdditionalDetail(tc: any) {
-    if (additionalDetails[tc.id] || loadingAdditionalId) return;
+  async function handleGenerateAdditional(tc: any) {
+    if (tc.steps) return;
 
     try {
       setLoadingAdditionalId(tc.id);
 
-      const res = await fetch(
-        "http://localhost:3000/api/scenarios/additional/steps",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ additionalTestCase: tc }),
-        }
-      );
+      const data = await generateAdditionalSteps(tc);
 
-      const data = await res.json();
-
-      setAdditionalDetails((prev) => ({
+      setScenario((prev: any) => ({
         ...prev,
-        [tc.id]: data,
+        additionalTestCases: prev.additionalTestCases.map((t: any) =>
+          t.id === tc.id ? { ...t, ...data } : t
+        ),
       }));
     } finally {
       setLoadingAdditionalId(null);
@@ -73,13 +71,13 @@ export default function TestScenariosPage() {
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
             rows={4}
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3"
+            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-600"
           />
 
           <div className="flex justify-end">
             <button
               onClick={handleGenerate}
-              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
+              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition"
             >
               Spustit QA analýzu
             </button>
@@ -94,7 +92,7 @@ export default function TestScenariosPage() {
                 <AiGeneratedBadge />
               </div>
 
-              <h2 className="text-lg font-semibold flex items-center gap-2 mb-2">
+              <h2 className="text-xl font-semibold flex items-center gap-2 mb-2">
                 <FaClipboardList />
                 {scenario.title}
               </h2>
@@ -108,7 +106,6 @@ export default function TestScenariosPage() {
                 <FaCheckCircle className="text-green-400" />
                 Předpoklady
               </h3>
-
               <ul className="list-disc list-inside text-sm text-slate-300 mb-6">
                 {scenario.preconditions.map((p: string, i: number) => (
                   <li key={i}>{p}</li>
@@ -120,75 +117,80 @@ export default function TestScenariosPage() {
                 <FaListOl />
                 Kroky testu (Acceptance / Happy Path)
               </h3>
-
-              {/* ⬇️ TADY JE FIX – UI řeší číslování */}
               <ol className="list-decimal list-inside text-sm text-slate-300 mb-6 space-y-1">
                 {scenario.steps.map((s: string, i: number) => (
-                  <li key={i}>{s.replace(/^\d+[\.\)]\s*/, "")}</li>
+                  <li key={i}>{s}</li>
                 ))}
               </ol>
 
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
+                <FaCheckCircle className="text-green-400" />
+                Očekávaný výsledek
+              </h3>
               <p className="text-sm text-slate-300 mb-6">
-                <strong>Očekávaný výsledek:</strong>{" "}
                 {scenario.expectedResult}
               </p>
 
               {/* ADDITIONAL */}
-              <h3 className="font-semibold mt-8 mb-3">
-                Další testovací případy
-              </h3>
+              <button
+                onClick={() => setShowAdditional(!showAdditional)}
+                className="flex items-center gap-2 text-sm text-slate-300 hover:text-white"
+              >
+                {showAdditional ? <FaChevronDown /> : <FaChevronRight />}
+                Další testovací případy ({scenario.additionalTestCases.length})
+              </button>
 
-              <ul className="space-y-3">
-                {scenario.additionalTestCases.map((tc: any) => (
-                  <li
-                    key={tc.id}
-                    onClick={() => loadAdditionalDetail(tc)}
-                    className="cursor-pointer rounded-lg border border-slate-800 bg-slate-950 p-4 hover:border-indigo-500 transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold">
-                        {tc.type} – {tc.title}
-                      </div>
-
-                      {loadingAdditionalId === tc.id && (
-                        <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                      )}
-                    </div>
-
-                    <div className="text-xs text-slate-400 mt-1">
-                      {tc.description}
-                    </div>
-
-                    {additionalDetails[tc.id] && (
-                      <div className="mt-4 text-sm text-slate-300 border-t border-slate-800 pt-4">
-                        {/* 🔥 implicitní předpoklady */}
-                        <div className="mb-3 text-xs text-slate-400">
-                          <strong>Předpoklady:</strong> Uživatel je na relevantní
-                          stránce aplikace a má potřebná oprávnění.
+              {showAdditional && (
+                <div className="mt-4 space-y-4">
+                  {scenario.additionalTestCases.map((tc: any) => (
+                    <div
+                      key={tc.id}
+                      className="border border-slate-800 bg-slate-950 rounded-lg p-4"
+                    >
+                      <div
+                        onClick={() => handleGenerateAdditional(tc)}
+                        className="flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="font-semibold">
+                          {tc.type} – {tc.title}
                         </div>
 
-                        {/* ⬇️ číslované kroky */}
-                        <ol className="list-decimal list-inside space-y-1">
-                          {additionalDetails[tc.id].steps.map(
-                            (s: string, i: number) => (
-                              <li key={i}>{s}</li>
-                            )
-                          )}
-                        </ol>
-
-                        <p className="mt-3 text-xs text-slate-400">
-                          {additionalDetails[tc.id].expectedResult}
-                        </p>
+                        {loadingAdditionalId === tc.id && (
+                          <FaSpinner className="animate-spin text-indigo-400" />
+                        )}
                       </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
+
+                      <p className="text-xs text-slate-400 mt-1">
+                        {tc.description}
+                      </p>
+
+                      {tc.steps && (
+                        <>
+                          <p className="text-xs text-slate-500 mt-2 italic">
+                            Předpoklady zděděny z Acceptance testu
+                          </p>
+
+                          <ol className="list-decimal list-inside text-sm text-slate-300 mt-3 space-y-1">
+                            {tc.steps.map((s: string, i: number) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ol>
+
+                          <p className="text-sm text-slate-400 mt-2">
+                            <strong>Očekávaný výsledek:</strong>{" "}
+                            {tc.expectedResult}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* RIGHT */}
+            {/* RIGHT – EXPERT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
-              <h3 className="font-semibold flex items-center gap-2 mb-3">
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
                 <FaLightbulb className="text-yellow-400" />
                 Expert QA Insight
               </h3>
@@ -197,7 +199,8 @@ export default function TestScenariosPage() {
                 {scenario.expert.reasoning}
               </p>
 
-              <h4 className="font-semibold mb-1">
+              <h4 className="font-semibold flex items-center gap-2 mb-1">
+                <FaShieldAlt className="text-green-400" />
                 Coverage (Acceptance Scope)
               </h4>
               <ul className="list-disc list-inside text-sm text-green-400 mb-4">
@@ -216,7 +219,8 @@ export default function TestScenariosPage() {
                 ))}
               </ul>
 
-              <h4 className="font-semibold mb-1">
+              <h4 className="font-semibold flex items-center gap-2 mb-1">
+                <FaRobot className="text-indigo-400" />
                 Automation Tips (Playwright)
               </h4>
               <ul className="list-disc list-inside text-sm text-slate-300">
