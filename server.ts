@@ -15,14 +15,14 @@ const openai = new OpenAI({
 
 /* =========================
    HEALTH CHECK
-   ========================= */
+========================= */
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
 /* =========================
    AI – GENERATE QA ANALYSIS
-   ========================= */
+========================= */
 app.post("/api/scenarios", async (req, res) => {
   const { intent } = req.body;
 
@@ -34,6 +34,8 @@ app.post("/api/scenarios", async (req, res) => {
 
   try {
     const prompt = `
+VRAŤ POUZE VALIDNÍ JSON.
+
 Jsi senior QA automation architekt (enterprise úroveň).
 Používáš výhradně Playwright.
 
@@ -49,28 +51,54 @@ VYTVOŘ:
    - UX
    - DATA
 
-VRAŤ POUZE VALIDNÍ JSON V TOMTO FORMÁTU:
+KAŽDÝ TEST CASE MUSÍ OBSAHOVAT:
+- id
+- type
+- title
+- description
+- expectedResult
+- qaInsight:
+  - reasoning
+  - coverage (array)
+  - risks (array)
+  - automationTips (array)
 
+AKCEPTAČNÍ TEST NAVÍC OBSAHUJE:
+- preconditions
+- steps
+
+DALŠÍ TESTY:
+- kroky se NEGENERUJÍ hned
+
+STRUKTURA:
 {
   "testCase": {
     "id": "TC-ACC-001",
-    "title": "Název akceptačního testu",
-    "description": "Popis business scénáře",
-    "preconditions": ["string"],
-    "steps": ["string"],
-    "expectedResult": "string",
+    "type": "ACCEPTANCE",
+    "title": "",
+    "description": "",
+    "preconditions": [],
+    "steps": [],
+    "expectedResult": "",
     "qaInsight": {
-      "reasoning": "Proč je tento test klíčový",
-      "coverage": ["string"],
-      "risks": ["string"],
-      "automationTips": ["string"]
+      "reasoning": "",
+      "coverage": [],
+      "risks": [],
+      "automationTips": []
     },
     "additionalTestCases": [
       {
-        "id": "NEG-1",
-        "type": "NEGATIVE",
-        "title": "Název testu",
-        "description": "Popis rizika"
+        "id": "",
+        "type": "",
+        "title": "",
+        "description": "",
+        "expectedResult": "",
+        "qaInsight": {
+          "reasoning": "",
+          "coverage": [],
+          "risks": [],
+          "automationTips": []
+        }
       }
     ]
   }
@@ -78,8 +106,6 @@ VRAŤ POUZE VALIDNÍ JSON V TOMTO FORMÁTU:
 
 TESTOVACÍ ZÁMĚR:
 "${intent}"
-
-Odpověď MUSÍ být výhradně JSON.
 `;
 
     const completion = await openai.chat.completions.create({
@@ -90,7 +116,7 @@ Odpověď MUSÍ být výhradně JSON.
         {
           role: "system",
           content:
-            "Musíš odpovědět výhradně jako validní JSON objekt. Nepřidávej žádný text mimo JSON.",
+            "Musíš odpovědět výhradně jako validní JSON objekt. Slovo JSON musí být přítomné.",
         },
         {
           role: "user",
@@ -100,7 +126,6 @@ Odpověď MUSÍ být výhradně JSON.
     });
 
     const content = completion.choices[0].message.content;
-
     if (!content) {
       throw new Error("AI nevrátila žádný obsah.");
     }
@@ -108,7 +133,11 @@ Odpověď MUSÍ být výhradně JSON.
     const parsed = JSON.parse(content);
 
     // 🧠 HARD VALIDACE KONTRAKTU
-    if (!parsed.testCase || !parsed.testCase.qaInsight) {
+    if (
+      !parsed.testCase ||
+      !parsed.testCase.qaInsight ||
+      !Array.isArray(parsed.testCase.additionalTestCases)
+    ) {
       throw new Error("Neplatná struktura odpovědi AI.");
     }
 
@@ -124,7 +153,7 @@ Odpověď MUSÍ být výhradně JSON.
 
 /* =========================
    AI – GENERATE STEPS FOR ADDITIONAL TEST CASE
-   ========================= */
+========================= */
 app.post("/api/scenarios/additional/steps", async (req, res) => {
   const { additionalTestCase } = req.body;
 
@@ -134,23 +163,22 @@ app.post("/api/scenarios/additional/steps", async (req, res) => {
 
   try {
     const prompt = `
+VRAŤ POUZE VALIDNÍ JSON.
+
 Jsi senior QA automation expert.
 Používáš výhradně Playwright.
 
-Vygeneruj detailní testovací kroky pro tento test:
+Vygeneruj DETAILNÍ testovací kroky pro tento test:
 
 TYP: ${additionalTestCase.type}
 NÁZEV: ${additionalTestCase.title}
 POPIS: ${additionalTestCase.description}
 
-VRAŤ POUZE JSON:
-
+STRUKTURA:
 {
   "steps": ["string"],
   "expectedResult": "string"
 }
-
-Odpověď musí být validní JSON.
 `;
 
     const completion = await openai.chat.completions.create({
@@ -161,7 +189,7 @@ Odpověď musí být validní JSON.
         {
           role: "system",
           content:
-            "Odpověz výhradně jako JSON objekt. Žádný jiný text.",
+            "Odpověz výhradně jako JSON objekt. Slovo JSON musí být přítomné.",
         },
         {
           role: "user",
@@ -171,7 +199,6 @@ Odpověď musí být validní JSON.
     });
 
     const content = completion.choices[0].message.content;
-
     if (!content) {
       throw new Error("AI nevrátila žádný obsah.");
     }
@@ -185,7 +212,7 @@ Odpověď musí být validní JSON.
 
 /* =========================
    SERVER START
-   ========================= */
+========================= */
 app.listen(3000, () => {
   console.log("✅ Backend běží na http://localhost:3000");
 });
