@@ -6,7 +6,19 @@ import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+/* =========================
+   CORS
+========================= */
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+app.options("*", cors());
 app.use(express.json());
 
 const openai = new OpenAI({
@@ -62,12 +74,12 @@ Pouze ACCEPTANCE test má navíc:
 DALŠÍ TESTY:
 - kroky se generují až později
 
-STRUKTURA:
+STRUKTURA IDEÁLNĚ:
 
 {
   "testCase": {
-    "id": "TC-ACC-001",
-    "type": "ACCEPTANCE",
+    "id": "",
+    "type": "",
     "title": "",
     "description": "",
     "preconditions": [],
@@ -79,21 +91,7 @@ STRUKTURA:
       "risks": [],
       "automationTips": []
     },
-    "additionalTestCases": [
-      {
-        "id": "",
-        "type": "",
-        "title": "",
-        "description": "",
-        "expectedResult": "",
-        "qaInsight": {
-          "reasoning": "",
-          "coverage": [],
-          "risks": [],
-          "automationTips": []
-        }
-      }
-    ]
+    "additionalTestCases": []
   }
 }
 
@@ -124,15 +122,31 @@ TESTOVACÍ ZÁMĚR:
 
     const parsed = JSON.parse(content);
 
-    if (
-      !parsed.testCase ||
-      !parsed.testCase.qaInsight ||
-      !Array.isArray(parsed.testCase.additionalTestCases)
-    ) {
-      throw new Error("Neplatná struktura odpovědi AI.");
+    /* =========================
+       🔧 NORMALIZACE ODPOVĚDI AI
+    ========================= */
+    const testCase = parsed.testCase ?? parsed;
+
+    if (!testCase || typeof testCase !== "object") {
+      throw new Error("AI nevrátila testCase objekt.");
     }
 
-    res.json(parsed);
+    // povinné fallbacky – AI není deterministická
+    testCase.qaInsight ??= {
+      reasoning: "",
+      coverage: [],
+      risks: [],
+      automationTips: [],
+    };
+
+    testCase.preconditions ??= [];
+    testCase.steps ??= [];
+    testCase.additionalTestCases ??= [];
+
+    // sjednocený výstup pro FE
+    res.json({
+      testCase,
+    });
   } catch (error) {
     console.error("AI ERROR:", error);
     res.status(500).json({
@@ -149,7 +163,9 @@ app.post("/api/scenarios/additional/steps", async (req, res) => {
   const { additionalTestCase } = req.body;
 
   if (!additionalTestCase?.id || !additionalTestCase?.type) {
-    return res.status(400).json({ error: "Neplatný test case." });
+    return res.status(400).json({
+      error: "Neplatný test case.",
+    });
   }
 
   try {
@@ -193,12 +209,55 @@ STRUKTURA:
       throw new Error("AI nevrátila žádný obsah.");
     }
 
-    res.json(JSON.parse(content));
+    const parsed = JSON.parse(content);
+
+    res.json({
+      steps: parsed.steps ?? [],
+      expectedResult: parsed.expectedResult ?? "",
+    });
   } catch (error) {
     console.error("AI ERROR:", error);
     res.status(500).json({
       error: "Chyba při generování kroků",
       details: String(error),
+    });
+  }
+});
+
+/* =========================
+   JIRA – EXPORT TEST CASE (MOCK)
+========================= */
+app.post("/api/integrations/jira/export", (req, res) => {
+  try {
+    const { testCase } = req.body;
+
+    if (!testCase) {
+      return res.status(400).json({
+        error: "Chybí testCase payload.",
+      });
+    }
+
+    const jiraPayload = {
+      summary: testCase.title,
+      preconditions: testCase.preconditions ?? "N/A",
+      steps: (testCase.steps ?? []).map(
+        (s: { step: string; expected: string }, index: number) => ({
+          order: index + 1,
+          action: s.step,
+          expectedResult: s.expected,
+        })
+      ),
+    };
+
+    res.json({
+      mode: "MOCK",
+      message: "Test case převeden do JIRA formátu",
+      jiraPayload,
+    });
+  } catch (error) {
+    console.error("JIRA EXPORT ERROR:", error);
+    res.status(500).json({
+      error: "Chyba při exportu do JIRA",
     });
   }
 });

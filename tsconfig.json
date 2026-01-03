@@ -26,7 +26,7 @@
 
   "include": [
     "agent/**/*.ts",
-    "server.ts",
+    "server/server.ts",
     "ui/**/*.ts",
     "ui/**/*.tsx",
     "playwright/**/*.ts"

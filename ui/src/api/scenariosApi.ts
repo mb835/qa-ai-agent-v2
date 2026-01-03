@@ -2,7 +2,7 @@ const API_URL = "http://localhost:3000";
 
 /* =========================
    GENERATE MAIN SCENARIO
-   ========================= */
+========================= */
 export async function generateScenario(intent: string) {
   const res = await fetch(`${API_URL}/api/scenarios`, {
     method: "POST",
@@ -12,16 +12,23 @@ export async function generateScenario(intent: string) {
     body: JSON.stringify({ intent }),
   });
 
+  const data = await res.json().catch(() => null);
+
   if (!res.ok) {
-    throw new Error("Failed to generate scenario");
+    console.error("API ERROR /api/scenarios:", data);
+    throw new Error(
+      data?.details ||
+        data?.error ||
+        "Failed to generate scenario (unknown backend error)"
+    );
   }
 
-  return res.json();
+  return data;
 }
 
 /* =========================
    GENERATE ADDITIONAL STEPS (LAZY)
-   ========================= */
+========================= */
 export async function generateAdditionalSteps(additionalTestCase: {
   id: string;
   type: string;
@@ -38,9 +45,16 @@ export async function generateAdditionalSteps(additionalTestCase: {
     }),
   });
 
+  const data = await res.json().catch(() => null);
+
   if (!res.ok) {
-    throw new Error("Failed to generate additional test steps");
+    console.error("API ERROR /additional/steps:", data);
+    throw new Error(
+      data?.details ||
+        data?.error ||
+        "Failed to generate additional test steps"
+    );
   }
 
-  return res.json();
+  return data;
 }
