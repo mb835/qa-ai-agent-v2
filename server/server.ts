@@ -22,7 +22,7 @@ app.get("/health", (_req, res) => {
 });
 
 /* =========================
-   AI PROMPT
+   AI PROMPT – SCENARIO
 ========================= */
 function buildScenarioPrompt(intent: string, isRetry = false) {
   return `
@@ -31,7 +31,7 @@ VRAŤ POUZE VALIDNÍ JSON.
 Jsi senior QA automation architekt (enterprise úroveň).
 Používáš výhradně Playwright.
 
-${isRetry ? "POZOR: PŘEDCHOZÍ ODPOVĚĎ BYLA NEÚPLNÁ. MUSÍŠ VRÁTIT KROKY ACCEPTANCE TESTU." : ""}
+${isRetry ? "POZOR: PŘEDCHOZÍ ODPOVĚĎ BYLA NEÚPLNÁ. ACCEPTANCE TEST MUSÍ MÍT KROKY." : ""}
 
 Vytvoř:
 - 1 hlavní ACCEPTANCE test
@@ -55,7 +55,7 @@ POVINNÉ:
   - steps (array, min. 5 kroků)
 
 DALŠÍ TESTY:
-- kroky se generují až později
+- NESMÍ obsahovat kroky
 
 STRUKTURA:
 
@@ -98,14 +98,8 @@ async function generateScenarioWithRetry(intent: string) {
       temperature: isRetry ? 0.1 : 0.25,
       response_format: { type: "json_object" },
       messages: [
-        {
-          role: "system",
-          content: "Odpověz výhradně jako validní JSON objekt.",
-        },
-        {
-          role: "user",
-          content: buildScenarioPrompt(intent, isRetry),
-        },
+        { role: "system", content: "Odpověz výhradně jako validní JSON objekt." },
+        { role: "user", content: buildScenarioPrompt(intent, isRetry) },
       ],
     });
 
@@ -119,7 +113,6 @@ async function generateScenarioWithRetry(intent: string) {
     lastResult = parsed;
 
     const steps = parsed?.testCase?.steps;
-
     if (Array.isArray(steps) && steps.length >= 5) {
       return {
         ...parsed,
@@ -132,7 +125,6 @@ async function generateScenarioWithRetry(intent: string) {
     attempt++;
   }
 
-  // fallback – partial
   return {
     ...lastResult,
     meta: {
@@ -142,7 +134,7 @@ async function generateScenarioWithRetry(intent: string) {
 }
 
 /* =========================
-   AI – GENERATE QA ANALYSIS
+   AI – GENERATE SCENARIO
 ========================= */
 app.post("/api/scenarios", async (req, res) => {
   const { intent } = req.body;
@@ -166,7 +158,7 @@ app.post("/api/scenarios", async (req, res) => {
 });
 
 /* =========================
-   AI – GENERATE STEPS FOR ADDITIONAL TEST CASE
+   AI – GENERATE STEPS (MANUAL)
 ========================= */
 app.post("/api/scenarios/additional/steps", async (req, res) => {
   const { additionalTestCase } = req.body;
@@ -213,6 +205,62 @@ STRUKTURA:
     console.error("AI ERROR:", error);
     res.status(500).json({
       error: "Chyba při generování kroků",
+      details: String(error),
+    });
+  }
+});
+
+/* =========================
+   AI – GENERATE EXPERT INSIGHT ⭐
+========================= */
+app.post("/api/scenarios/insight", async (req, res) => {
+  const { testCase } = req.body;
+
+  if (!testCase?.title || !testCase?.type) {
+    return res.status(400).json({ error: "Neplatný test case." });
+  }
+
+  try {
+    const prompt = `
+VRAŤ POUZE VALIDNÍ JSON.
+
+Jsi senior QA expert.
+
+Dopočítej Expert QA Insight pro test:
+
+TYP: ${testCase.type}
+NÁZEV: ${testCase.title}
+POPIS: ${testCase.description}
+
+STRUKTURA:
+{
+  "reasoning": "",
+  "coverage": [],
+  "risks": [],
+  "automationTips": []
+}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.25,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "Odpověz pouze jako JSON." },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    const content = completion.choices[0].message.content;
+    if (!content) throw new Error("AI nevrátila žádný obsah.");
+
+    res.json({
+      qaInsight: JSON.parse(content),
+    });
+  } catch (error) {
+    console.error("AI ERROR:", error);
+    res.status(500).json({
+      error: "Chyba při generování Expert Insight",
       details: String(error),
     });
   }

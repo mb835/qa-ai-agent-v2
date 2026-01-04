@@ -13,7 +13,11 @@ import {
   FaMagic,
 } from "react-icons/fa";
 
-import { generateScenario, generateAdditionalSteps } from "../api/scenariosApi";
+import {
+  generateScenario,
+  generateAdditionalSteps,
+  generateExpertInsight,
+} from "../api/scenariosApi";
 import { runPlaywright } from "../api/runPlaywrightApi";
 import AiGeneratedBadge from "../components/AiGeneratedBadge";
 import LoadingOverlay from "../components/LoadingOverlay";
@@ -24,12 +28,28 @@ export default function TestScenariosPage() {
   const [activeTestCase, setActiveTestCase] = useState<any>(null);
 
   const [loading, setLoading] = useState(false);
-  const [loadingAdditionalId, setLoadingAdditionalId] = useState<string | null>(
-    null
-  );
+  const [loadingStepsId, setLoadingStepsId] = useState<string | null>(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
   const [pwLoadingId, setPwLoadingId] = useState<string | null>(null);
 
-  async function handleGenerate() {
+  /* =========================
+     DERIVED FLAGS (FIX)
+  ========================= */
+  const hasSteps =
+    Array.isArray(activeTestCase?.steps) &&
+    activeTestCase.steps.length > 0;
+
+  const hasInsight =
+    activeTestCase?.qaInsight &&
+    Array.isArray(activeTestCase.qaInsight.coverage) &&
+    activeTestCase.qaInsight.coverage.length > 0;
+
+  const isAcceptance = activeTestCase?.id === scenario?.id;
+
+  /* =========================
+     GENERATE SCENARIO
+  ========================= */
+  async function handleGenerateScenario() {
     if (!intent.trim()) return;
 
     try {
@@ -42,13 +62,19 @@ export default function TestScenariosPage() {
     }
   }
 
-  async function handleSelectAdditional(tc: any) {
+  /* =========================
+     SELECT TEST CASE
+  ========================= */
+  function handleSelectTestCase(tc: any) {
     setActiveTestCase(tc);
   }
 
+  /* =========================
+     GENERATE STEPS
+  ========================= */
   async function handleGenerateSteps(tc: any) {
     try {
-      setLoadingAdditionalId(tc.id);
+      setLoadingStepsId(tc.id);
       const data = await generateAdditionalSteps(tc);
 
       setScenario((prev: any) => ({
@@ -58,14 +84,48 @@ export default function TestScenariosPage() {
         ),
       }));
 
-      setActiveTestCase((prev: any) =>
-        prev?.id === tc.id ? { ...prev, ...data } : prev
-      );
+      setActiveTestCase((prev: any) => ({
+        ...prev,
+        ...data,
+      }));
     } finally {
-      setLoadingAdditionalId(null);
+      setLoadingStepsId(null);
     }
   }
 
+  /* =========================
+     GENERATE EXPERT INSIGHT
+  ========================= */
+  async function handleGenerateInsight(tc: any) {
+    try {
+      setLoadingInsight(true);
+      const data = await generateExpertInsight(tc);
+
+      setScenario((prev: any) => {
+        if (prev.id === tc.id) {
+          return { ...prev, qaInsight: data.qaInsight };
+        }
+
+        return {
+          ...prev,
+          additionalTestCases: prev.additionalTestCases.map((t: any) =>
+            t.id === tc.id ? { ...t, qaInsight: data.qaInsight } : t
+          ),
+        };
+      });
+
+      setActiveTestCase((prev: any) => ({
+        ...prev,
+        qaInsight: data.qaInsight,
+      }));
+    } finally {
+      setLoadingInsight(false);
+    }
+  }
+
+  /* =========================
+     PLAYWRIGHT
+  ========================= */
   async function handleRunPlaywright(tc: any) {
     try {
       setPwLoadingId(tc.id);
@@ -77,16 +137,6 @@ export default function TestScenariosPage() {
       setPwLoadingId(null);
     }
   }
-
-  const isAcceptance = activeTestCase?.id === scenario?.id;
-
-  // 🔑 KLÍČOVÁ OPRAVA – vždy bereme plný test case ze scénáře
-  const resolvedTestCase =
-    activeTestCase?.id === scenario?.id
-      ? scenario
-      : scenario?.additionalTestCases.find(
-          (tc: any) => tc.id === activeTestCase?.id
-        ) || activeTestCase;
 
   return (
     <div className="px-8 py-6 relative">
@@ -106,7 +156,7 @@ export default function TestScenariosPage() {
           />
           <div className="flex justify-end mt-3">
             <button
-              onClick={handleGenerate}
+              onClick={handleGenerateScenario}
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
             >
               Spustit QA analýzu
@@ -114,12 +164,12 @@ export default function TestScenariosPage() {
           </div>
         </div>
 
-        {scenario && resolvedTestCase && (
+        {scenario && activeTestCase && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             {/* LEFT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 relative">
               <div className="absolute top-4 right-4">
-                <AiGeneratedBadge status={scenario.meta?.aiStatus} />
+                <AiGeneratedBadge />
               </div>
 
               {!isAcceptance && (
@@ -133,67 +183,62 @@ export default function TestScenariosPage() {
 
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-1">
                 <FaClipboardList />
-                {resolvedTestCase.title}
+                {activeTestCase.title}
               </h2>
 
               <span className="inline-block text-xs px-2 py-1 rounded bg-emerald-700/20 text-emerald-400 mb-3">
-                {resolvedTestCase.type}
+                {activeTestCase.type}
               </span>
 
               <p className="text-sm text-slate-400 mb-4">
-                {resolvedTestCase.description}
+                {activeTestCase.description}
               </p>
 
               <h3 className="font-semibold mb-2 flex items-center gap-2">
                 <FaListOl /> Kroky
               </h3>
 
-              {resolvedTestCase.steps ? (
+              {loadingStepsId === activeTestCase.id ? (
+                <div className="text-sm text-slate-400 flex items-center gap-2">
+                  <FaSpinner className="animate-spin" />
+                  Generuji kroky…
+                </div>
+              ) : hasSteps ? (
                 <ol className="list-decimal list-inside text-sm space-y-1 mb-4">
-                  {resolvedTestCase.steps.map((s: string, i: number) => (
+                  {activeTestCase.steps.map((s: string, i: number) => (
                     <li key={i}>{s}</li>
                   ))}
                 </ol>
-              ) : !isAcceptance ? (
-                <button
-                  onClick={() => handleGenerateSteps(resolvedTestCase)}
-                  className="flex items-center gap-2 text-sm px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
-                >
-                  {loadingAdditionalId === resolvedTestCase.id ? (
-                    <>
-                      <FaSpinner className="animate-spin" />
-                      Generuji kroky…
-                    </>
-                  ) : (
-                    <>
-                      <FaMagic />
-                      Generate steps
-                    </>
-                  )}
-                </button>
               ) : (
-                <p className="text-sm italic text-slate-500">
-                  Kroky nejsou k dispozici.
-                </p>
+                <button
+                  onClick={() => handleGenerateSteps(activeTestCase)}
+                  className="text-sm px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+                >
+                  <FaMagic className="inline mr-2" />
+                  Generate steps
+                </button>
               )}
 
-              {resolvedTestCase.expectedResult && (
-                <p className="text-sm mt-4">
-                  <strong>Očekávaný výsledek:</strong>{" "}
-                  {resolvedTestCase.expectedResult}
-                </p>
-              )}
+              <p className="text-sm mb-4">
+                <strong>Očekávaný výsledek:</strong>{" "}
+                {activeTestCase.expectedResult}
+              </p>
 
               <button
-                onClick={() => handleRunPlaywright(resolvedTestCase)}
-                className="mt-4 px-4 py-2 bg-emerald-600 rounded-lg"
+                disabled={!hasSteps}
+                onClick={() => handleRunPlaywright(activeTestCase)}
+                className={`mt-2 px-4 py-2 rounded-lg ${
+                  hasSteps
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-slate-700 cursor-not-allowed"
+                }`}
               >
-                {pwLoadingId === resolvedTestCase.id
+                {pwLoadingId === activeTestCase.id
                   ? "Generuji…"
                   : "Generate Playwright"}
               </button>
 
-              {/* ADDITIONAL LIST */}
+              {/* ADDITIONAL */}
               <div className="mt-6">
                 <h4 className="flex items-center gap-2 text-sm mb-2">
                   <FaChevronDown /> Další testovací případy (
@@ -204,9 +249,9 @@ export default function TestScenariosPage() {
                   {scenario.additionalTestCases.map((tc: any) => (
                     <button
                       key={tc.id}
-                      onClick={() => handleSelectAdditional(tc)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        resolvedTestCase.id === tc.id
+                      onClick={() => handleSelectTestCase(tc)}
+                      className={`w-full text-left p-3 rounded-lg border ${
+                        activeTestCase.id === tc.id
                           ? "border-indigo-500 bg-slate-800"
                           : "border-slate-800 bg-slate-950 hover:bg-slate-900"
                       }`}
@@ -220,20 +265,24 @@ export default function TestScenariosPage() {
             </div>
 
             {/* RIGHT – EXPERT QA INSIGHT */}
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 sticky top-6 h-fit">
+            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
               <h3 className="font-semibold flex items-center gap-2 mb-4">
                 <FaLightbulb className="text-yellow-400" />
                 Expert QA Insight
               </h3>
 
-              {resolvedTestCase.qaInsight ? (
+              {!hasSteps ? (
+                <p className="text-sm italic text-slate-400">
+                  Nejprve vygeneruj kroky testu.
+                </p>
+              ) : hasInsight ? (
                 <div className="space-y-6 text-sm">
                   <section>
                     <h4 className="flex items-center gap-2 font-semibold mb-1">
                       <FaBullseye className="text-indigo-400" />
                       Proč je test klíčový
                     </h4>
-                    <p>{resolvedTestCase.qaInsight.reasoning}</p>
+                    <p>{activeTestCase.qaInsight.reasoning}</p>
                   </section>
 
                   <section>
@@ -242,7 +291,7 @@ export default function TestScenariosPage() {
                       Pokrytí
                     </h4>
                     <ul className="list-disc list-inside">
-                      {resolvedTestCase.qaInsight.coverage.map(
+                      {activeTestCase.qaInsight.coverage.map(
                         (c: string, i: number) => (
                           <li key={i}>{c}</li>
                         )
@@ -256,7 +305,7 @@ export default function TestScenariosPage() {
                       Rizika
                     </h4>
                     <ul className="list-disc list-inside">
-                      {resolvedTestCase.qaInsight.risks.map(
+                      {activeTestCase.qaInsight.risks.map(
                         (r: string, i: number) => (
                           <li key={i}>{r}</li>
                         )
@@ -270,7 +319,7 @@ export default function TestScenariosPage() {
                       Doporučení pro Playwright
                     </h4>
                     <ul className="list-disc list-inside">
-                      {resolvedTestCase.qaInsight.automationTips.map(
+                      {activeTestCase.qaInsight.automationTips.map(
                         (t: string, i: number) => (
                           <li key={i}>{t}</li>
                         )
@@ -279,9 +328,15 @@ export default function TestScenariosPage() {
                   </section>
                 </div>
               ) : (
-                <p className="text-sm italic text-slate-400">
-                  Expert QA Insight se připravuje…
-                </p>
+                <button
+                  onClick={() => handleGenerateInsight(activeTestCase)}
+                  disabled={loadingInsight}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {loadingInsight
+                    ? "Generuji Expert Insight…"
+                    : "Generate Expert Insight"}
+                </button>
               )}
             </div>
           </div>

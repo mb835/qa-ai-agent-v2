@@ -12,22 +12,15 @@ export async function generateScenario(intent: string) {
     body: JSON.stringify({ intent }),
   });
 
-  const data = await res.json().catch(() => null);
-
   if (!res.ok) {
-    console.error("API ERROR /api/scenarios:", data);
-    throw new Error(
-      data?.details ||
-        data?.error ||
-        "Failed to generate scenario (unknown backend error)"
-    );
+    throw new Error("Failed to generate scenario");
   }
 
-  return data;
+  return res.json();
 }
 
 /* =========================
-   GENERATE ADDITIONAL STEPS (LAZY)
+   GENERATE ADDITIONAL STEPS
 ========================= */
 export async function generateAdditionalSteps(additionalTestCase: {
   id: string;
@@ -45,16 +38,35 @@ export async function generateAdditionalSteps(additionalTestCase: {
     }),
   });
 
-  const data = await res.json().catch(() => null);
-
   if (!res.ok) {
-    console.error("API ERROR /additional/steps:", data);
-    throw new Error(
-      data?.details ||
-        data?.error ||
-        "Failed to generate additional test steps"
-    );
+    throw new Error("Failed to generate additional steps");
   }
 
-  return data;
+  return res.json();
+}
+
+/* =========================
+   GENERATE EXPERT QA INSIGHT ⭐
+========================= */
+export async function generateExpertInsight(testCase: {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+}) {
+  const res = await fetch(`${API_URL}/api/scenarios/insight`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      testCase,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to generate expert insight");
+  }
+
+  return res.json();
 }
