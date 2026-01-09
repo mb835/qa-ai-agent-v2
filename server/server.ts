@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+console.log("👉 JIRA PROJECT KEY:", process.env.JIRA_PROJECT_KEY);
 import OpenAI from "openai";
 import fetch from "node-fetch";
-import { spawn } from "child_process";
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 SERVER VERSION: JIRA EPIC EXPORT ENABLED");
+console.log("🔥 SERVER VERSION: JIRA EXPORT TESTCASE + SCENARIO");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -267,7 +267,7 @@ STRUKTURA:
 });
 
 /* =========================
-   🔥 JIRA EPIC EXPORT
+   JIRA ADF HELPERS
 ========================= */
 
 function textNode(text: string) {
@@ -350,52 +350,104 @@ function buildJiraADF(testCase: any) {
   };
 }
 
-app.post("/api/integrations/jira/export", async (req, res) => {
+/* =========================
+   JIRA CREATE ISSUE
+========================= */
+async function createJiraIssue(fields: any) {
+  const response = await fetch(
+    `${process.env.JIRA_BASE_URL}/rest/api/3/issue`,
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Basic " +
+          Buffer.from(
+            `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+          ).toString("base64"),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ fields }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) throw data;
+  return data;
+}
+
+/* =========================
+   ⭐ JIRA – EXPORT SINGLE TEST CASE
+========================= */
+app.post("/api/integrations/jira/export-testcase", async (req, res) => {
   const { testCase } = req.body;
 
-  if (!testCase?.title || !testCase?.type) {
-    return res.status(400).json({ error: "Neplatný test case." });
+  try {
+    const issue = await createJiraIssue({
+      project: { key: process.env.JIRA_PROJECT_KEY },
+      summary: `[${testCase.type}] ${testCase.title}`,
+
+      // ✅ MUSÍ BÝT ID – NE NAME
+      issuetype: { id: "10003" }, // Task v projektu 10000
+
+      description: buildJiraADF(testCase),
+    });
+
+    res.json({
+      issueKey: issue.key,
+      issueUrl: `${process.env.JIRA_BASE_URL}/browse/${issue.key}`,
+    });
+  } catch (error) {
+    console.error("JIRA TESTCASE EXPORT ERROR:", error);
+    res.status(500).json({ error });
   }
+});
+
+/* =========================
+   ⭐ JIRA – EXPORT WHOLE SCENARIO (EPIC + TASKS)
+========================= */
+app.post("/api/integrations/jira/export-scenario", async (req, res) => {
+  const { testCase } = req.body;
 
   try {
-    const response = await fetch(
-      `${process.env.JIRA_BASE_URL}/rest/api/3/issue`,
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            "Basic " +
-            Buffer.from(
-              `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
-            ).toString("base64"),
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fields: {
-            project: { key: process.env.JIRA_PROJECT_KEY },
-            summary: testCase.title,
-            issuetype: { id: "10005" }, // 👉 EPIC
-            description: buildJiraADF(testCase),
-          },
-        }),
-      }
-    );
+    // ===== CREATE EPIC =====
+    const epic = await createJiraIssue({
+      project: { key: process.env.JIRA_PROJECT_KEY },
+      summary: `[SCENARIO] ${testCase.title}`,
+      issuetype: { id: "10001" }, // Epic v projektu 10000
+      description: buildJiraADF(testCase),
+    });
 
-    const data = await response.json();
+    const tasks = [];
 
-    if (!response.ok) {
-      console.error("JIRA ERROR:", data);
-      return res.status(500).json({ error: data });
+    const allCases = [testCase, ...(testCase.additionalTestCases || [])];
+
+    for (const tc of allCases) {
+      const task = await createJiraIssue({
+        project: { key: process.env.JIRA_PROJECT_KEY },
+        summary: `[${tc.type}] ${tc.title}`,
+        issuetype: { id: "10003" }, // Task
+        parent: { key: epic.key },
+        description: buildJiraADF(tc),
+      });
+
+      tasks.push({
+        id: tc.id,
+        key: task.key,
+        url: `${process.env.JIRA_BASE_URL}/browse/${task.key}`,
+      });
     }
 
     res.json({
-      issueKey: data.key,
-      issueUrl: `${process.env.JIRA_BASE_URL}/browse/${data.key}`,
+      epic: {
+        key: epic.key,
+        url: `${process.env.JIRA_BASE_URL}/browse/${epic.key}`,
+      },
+      tasks,
     });
   } catch (error) {
-    console.error("JIRA EXPORT ERROR:", error);
-    res.status(500).json({ error: String(error) });
+    console.error("JIRA SCENARIO EXPORT ERROR:", error);
+    res.status(500).json({ error });
   }
 });
 

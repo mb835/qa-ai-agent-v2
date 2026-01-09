@@ -6,16 +6,11 @@ const API_URL = "http://localhost:3000";
 export async function generateScenario(intent: string) {
   const res = await fetch(`${API_URL}/api/scenarios`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ intent }),
   });
 
-  if (!res.ok) {
-    throw new Error("Failed to generate scenario");
-  }
-
+  if (!res.ok) throw new Error("Failed to generate scenario");
   return res.json();
 }
 
@@ -25,16 +20,11 @@ export async function generateScenario(intent: string) {
 export async function generateAdditionalSteps(additionalTestCase: any) {
   const res = await fetch(`${API_URL}/api/scenarios/additional/steps`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ additionalTestCase }),
   });
 
-  if (!res.ok) {
-    throw new Error("Failed to generate steps");
-  }
-
+  if (!res.ok) throw new Error("Failed to generate steps");
   return res.json();
 }
 
@@ -44,16 +34,11 @@ export async function generateAdditionalSteps(additionalTestCase: any) {
 export async function generateExpertInsight(testCase: any) {
   const res = await fetch(`${API_URL}/api/scenarios/insight`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ testCase }),
   });
 
-  if (!res.ok) {
-    throw new Error("Failed to generate expert insight");
-  }
-
+  if (!res.ok) throw new Error("Failed to generate expert insight");
   return res.json();
 }
 
@@ -63,15 +48,10 @@ export async function generateExpertInsight(testCase: any) {
 export function downloadPlaywrightSpec(testCase: any) {
   const fileName = `${testCase.id || "test"}.spec.ts`;
 
-  const content = `// Playwright test
-// ${testCase.title}
-
-import { test, expect } from "@playwright/test";
+  const content = `import { test, expect } from "@playwright/test";
 
 test("${testCase.title}", async ({ page }) => {
-${(testCase.steps || [])
-  .map((s: string) => `  // ${s}`)
-  .join("\n")}
+${(testCase.steps || []).map((s: string) => `  // ${s}`).join("\n")}
 });
 `;
 
@@ -87,28 +67,51 @@ ${(testCase.steps || [])
 }
 
 /* =========================
-   ⭐ EXPORT TEST CASE TO JIRA
+   ⭐ EXPORT SINGLE TEST CASE TO JIRA
 ========================= */
 export async function exportToJira(testCase: any): Promise<{
   issueKey: string;
   issueUrl: string;
 }> {
-  const res = await fetch(`${API_URL}/api/integrations/jira/export`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ testCase }),
-  });
+  const res = await fetch(
+    `${API_URL}/api/integrations/jira/export-testcase`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ testCase }),
+    }
+  );
 
   if (!res.ok) {
+    const t = await res.text();
+    console.error("JIRA export error:", t);
     throw new Error("Failed to export test case to JIRA");
   }
 
-  const data = await res.json();
+  return res.json();
+}
 
-  return {
-    issueKey: data.issueKey,
-    issueUrl: data.issueUrl,
-  };
+/* =========================
+   ⭐ EXPORT WHOLE SCENARIO TO JIRA
+========================= */
+export async function exportScenarioToJira(testCase: any): Promise<{
+  epic: { key: string; url: string };
+  tasks: { id: string; key: string; url: string }[];
+}> {
+  const res = await fetch(
+    `${API_URL}/api/integrations/jira/export-scenario`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ testCase }),
+    }
+  );
+
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("JIRA scenario export error:", t);
+    throw new Error("Failed to export scenario to JIRA");
+  }
+
+  return res.json();
 }

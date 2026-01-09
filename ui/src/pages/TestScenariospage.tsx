@@ -21,15 +21,19 @@ import {
   generateAdditionalSteps,
   generateExpertInsight,
   downloadPlaywrightSpec,
+  exportScenarioToJira,
   exportToJira,
 } from "../api/scenariosApi";
+
 import { runPlaywright } from "../api/runPlaywrightApi";
 import AiGeneratedBadge from "../components/AiGeneratedBadge";
 import LoadingOverlay from "../components/LoadingOverlay";
 
-type JiraExportResult = {
-  issueKey: string;
-  issueUrl: string;
+type JiraIssue = { key: string; url: string };
+
+type ScenarioJiraResult = {
+  epic: JiraIssue;
+  tasks: { id: string; key: string; url: string }[];
 };
 
 export default function TestScenariosPage() {
@@ -41,11 +45,13 @@ export default function TestScenariosPage() {
   const [loadingStepsId, setLoadingStepsId] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [pwLoadingId, setPwLoadingId] = useState<string | null>(null);
-  const [jiraLoadingId, setJiraLoadingId] = useState<string | null>(null);
 
-  // ✅ JIRA RESULT PER TEST CASE
-  const [jiraResults, setJiraResults] = useState<
-    Record<string, JiraExportResult>
+  const [scenarioExportLoading, setScenarioExportLoading] = useState(false);
+  const [scenarioJiraResult, setScenarioJiraResult] =
+    useState<ScenarioJiraResult | null>(null);
+
+  const [singleJiraResults, setSingleJiraResults] = useState<
+    Record<string, JiraIssue>
   >({});
 
   /* =========================
@@ -59,7 +65,8 @@ export default function TestScenariosPage() {
       const data = await generateScenario(intent);
       setScenario(data.testCase);
       setActiveTestCase(data.testCase);
-      setJiraResults({});
+      setScenarioJiraResult(null);
+      setSingleJiraResults({});
     } finally {
       setLoading(false);
     }
@@ -80,17 +87,14 @@ export default function TestScenariosPage() {
         ),
       }));
 
-      setActiveTestCase((prev: any) => ({
-        ...prev,
-        ...data,
-      }));
+      setActiveTestCase((prev: any) => ({ ...prev, ...data }));
     } finally {
       setLoadingStepsId(null);
     }
   }
 
   /* =========================
-     GENERATE / COMPLETE EXPERT INSIGHT
+     GENERATE INSIGHT
   ========================= */
   async function handleGenerateInsight(tc: any) {
     try {
@@ -98,9 +102,7 @@ export default function TestScenariosPage() {
       const data = await generateExpertInsight(tc);
 
       setScenario((prev: any) => {
-        if (prev.id === tc.id) {
-          return { ...prev, qaInsight: data.qaInsight };
-        }
+        if (prev.id === tc.id) return { ...prev, qaInsight: data.qaInsight };
 
         return {
           ...prev,
@@ -110,17 +112,14 @@ export default function TestScenariosPage() {
         };
       });
 
-      setActiveTestCase((prev: any) => ({
-        ...prev,
-        qaInsight: data.qaInsight,
-      }));
+      setActiveTestCase((prev: any) => ({ ...prev, qaInsight: data.qaInsight }));
     } finally {
       setLoadingInsight(false);
     }
   }
 
   /* =========================
-     PLAYWRIGHT – INTERNAL
+     PLAYWRIGHT
   ========================= */
   async function handleRunPlaywright(tc: any) {
     try {
@@ -134,35 +133,44 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     PLAYWRIGHT – DOWNLOAD
-  ========================= */
   function handleDownloadSpec(tc: any) {
     downloadPlaywrightSpec(tc);
   }
 
   /* =========================
-     JIRA EXPORT – PER TEST CASE
+     SINGLE JIRA EXPORT
   ========================= */
-  async function handleExportToJira(tc: any) {
+  async function handleExportSingleTestCase(tc: any) {
     try {
-      setJiraLoadingId(tc.id);
-
       const result = await exportToJira(tc);
-
-      setJiraResults((prev) => ({
+      setSingleJiraResults((prev) => ({
         ...prev,
-        [tc.id]: result,
+        [tc.id]: { key: result.issueKey, url: result.issueUrl },
       }));
     } catch {
-      alert("❌ Chyba při exportu do JIRA");
-    } finally {
-      setJiraLoadingId(null);
+      alert("❌ Chyba při exportu test case do JIRA");
     }
   }
 
   /* =========================
-     DERIVED STATE
+     SCENARIO JIRA EXPORT
+  ========================= */
+  async function handleExportWholeScenario() {
+    if (!scenario) return;
+
+    try {
+      setScenarioExportLoading(true);
+      const result = await exportScenarioToJira(scenario);
+      setScenarioJiraResult(result);
+    } catch {
+      alert("❌ Chyba při exportu scénáře do JIRA");
+    } finally {
+      setScenarioExportLoading(false);
+    }
+  }
+
+  /* =========================
+     DERIVED
   ========================= */
   const isAcceptance = activeTestCase?.id === scenario?.id;
   const hasSteps = Array.isArray(activeTestCase?.steps);
@@ -174,13 +182,14 @@ export default function TestScenariosPage() {
     activeTestCase.qaInsight.risks?.length > 0 &&
     activeTestCase.qaInsight.automationTips?.length > 0;
 
-  const jiraResultForActive = activeTestCase
-    ? jiraResults[activeTestCase.id]
-    : null;
+  const taskForActive =
+    scenarioJiraResult?.tasks.find((t) => t.id === activeTestCase?.id) || null;
+
+  const singleExport = singleJiraResults[activeTestCase?.id];
 
   return (
     <div className="px-8 py-6 relative">
-      {loading && <LoadingOverlay text="Probíhá QA analýza…" />}
+      {loading && <LoadingOverlay />}
 
       <div className="max-w-7xl mx-auto space-y-8">
         {/* INPUT */}
@@ -194,14 +203,42 @@ export default function TestScenariosPage() {
             rows={4}
             className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3 resize-none"
           />
-          <div className="flex justify-end mt-3">
+          <div className="flex justify-between mt-3">
             <button
               onClick={handleGenerateScenario}
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
             >
               Spustit QA analýzu
             </button>
+
+            {scenario && (
+              <button
+                onClick={handleExportWholeScenario}
+                disabled={scenarioExportLoading}
+                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700"
+              >
+                <FaJira className="inline mr-2" />
+                {scenarioExportLoading
+                  ? "Exportuji celý scénář…"
+                  : "Exportovat celý scénář do JIRA"}
+              </button>
+            )}
           </div>
+
+          {scenarioJiraResult && (
+            <div className="mt-3 text-sm text-emerald-400">
+              ✅ Epic vytvořen:{" "}
+              <a
+                href={scenarioJiraResult.epic.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline inline-flex items-center gap-1"
+              >
+                {scenarioJiraResult.epic.key}
+                <FaExternalLinkAlt />
+              </a>
+            </div>
+          )}
         </div>
 
         {scenario && activeTestCase && (
@@ -229,6 +266,36 @@ export default function TestScenariosPage() {
               <span className="inline-block text-xs px-2 py-1 rounded bg-emerald-700/20 text-emerald-400 mb-3">
                 {activeTestCase.type}
               </span>
+
+              {singleExport && (
+                <div className="mb-3 text-xs text-emerald-400">
+                  ✅ Exportováno do JIRA:{" "}
+                  <a
+                    href={singleExport.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline inline-flex items-center gap-1"
+                  >
+                    {singleExport.key}
+                    <FaExternalLinkAlt />
+                  </a>
+                </div>
+              )}
+
+              {taskForActive && (
+                <div className="mb-3 text-xs text-emerald-400">
+                  ✅ Součást scénáře:{" "}
+                  <a
+                    href={taskForActive.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline inline-flex items-center gap-1"
+                  >
+                    {taskForActive.key}
+                    <FaExternalLinkAlt />
+                  </a>
+                </div>
+              )}
 
               <p className="text-sm text-slate-400 mb-4">
                 {activeTestCase.description}
@@ -264,7 +331,6 @@ export default function TestScenariosPage() {
                 {activeTestCase.expectedResult}
               </p>
 
-              {/* ACTIONS */}
               <div className="flex flex-wrap gap-3 mt-4">
                 <button
                   disabled={!hasSteps}
@@ -288,39 +354,19 @@ export default function TestScenariosPage() {
                   }`}
                 >
                   <FaDownload className="inline mr-2" />
-                  Stáhnout Playwright test (.spec.ts)
+                  Stáhnout Playwright test
                 </button>
 
                 <button
-                  onClick={() => handleExportToJira(activeTestCase)}
-                  disabled={jiraLoadingId === activeTestCase.id}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700"
+                  onClick={() => handleExportSingleTestCase(activeTestCase)}
+                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700"
                 >
                   <FaJira className="inline mr-2" />
-                  {jiraLoadingId === activeTestCase.id
-                    ? "Exportuji do JIRA…"
-                    : "Exportovat test case do JIRA"}
+                  Exportovat test case do JIRA
                 </button>
               </div>
 
-              {jiraResultForActive && (
-                <div className="mt-4 text-sm bg-slate-800 border border-slate-700 rounded-lg p-3">
-                  <span className="text-emerald-400 font-semibold">
-                    JIRA issue vytvořeno:
-                  </span>{" "}
-                  <a
-                    href={jiraResultForActive.issueUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-400 underline inline-flex items-center gap-1"
-                  >
-                    {jiraResultForActive.issueKey}
-                    <FaExternalLinkAlt />
-                  </a>
-                </div>
-              )}
-
-              {/* ADDITIONAL TEST CASES */}
+              {/* ADDITIONAL */}
               <div className="mt-6">
                 <h4 className="flex items-center gap-2 text-sm mb-2">
                   <FaChevronDown /> Další testovací případy (
@@ -346,7 +392,7 @@ export default function TestScenariosPage() {
               </div>
             </div>
 
-            {/* RIGHT – EXPERT QA INSIGHT */}
+            {/* RIGHT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
               <h3 className="font-semibold flex items-center gap-2 mb-4">
                 <FaLightbulb className="text-yellow-400" />
