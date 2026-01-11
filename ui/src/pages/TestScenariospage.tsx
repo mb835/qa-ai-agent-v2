@@ -36,6 +36,62 @@ type ScenarioJiraResult = {
   tasks: { id: string; key: string; url: string }[];
 };
 
+/* =========================
+   TEST TYPE STYLES
+========================= */
+function getTestTypeStyle(type: string) {
+  switch (type?.toLowerCase()) {
+     case "acceptance":
+      return {
+        label: "Akceptační",
+        color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40",
+        icon: "✅",
+      };
+
+    case "negative":
+      return {
+        label: "Negativní",
+        color: "text-red-400 bg-red-500/15 border-red-500/40",
+        icon: "⚠",
+      };
+
+    case "edge":
+      return {
+        label: "Hraniční",
+        color: "text-amber-400 bg-amber-500/15 border-amber-500/40",
+        icon: "🧪",
+      };
+
+    case "security":
+      return {
+        label: "Bezpečnostní",
+        color: "text-purple-400 bg-purple-500/15 border-purple-500/40",
+        icon: "🔒",
+      };
+
+    case "ux":
+      return {
+        label: "Uživatelský (UX)",
+        color: "text-sky-400 bg-sky-500/15 border-sky-500/40",
+        icon: "👁",
+      };
+
+    case "data":
+      return {
+        label: "Datový",
+        color: "text-indigo-400 bg-indigo-500/15 border-indigo-500/40",
+        icon: "🗄",
+      };
+
+    default:
+      return {
+        label: type?.toUpperCase() || "Test",
+        color: "text-slate-400 bg-slate-500/10 border-slate-500/30",
+        icon: "🧩",
+      };
+  }
+}
+
 export default function TestScenariosPage() {
   const [intent, setIntent] = useState("");
   const [scenario, setScenario] = useState<any>(null);
@@ -54,13 +110,9 @@ export default function TestScenariosPage() {
     Record<string, JiraIssue>
   >({});
 
-  // ASYNC EXPORT JOB STATE
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<any>(null);
 
-  /* =========================
-     GENERATE SCENARIO
-  ========================= */
   async function handleGenerateScenario() {
     if (!intent.trim()) return;
 
@@ -79,9 +131,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     GENERATE STEPS
-  ========================= */
   async function handleGenerateSteps(tc: any) {
     try {
       setLoadingStepsId(tc.id);
@@ -107,9 +156,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     GENERATE INSIGHT
-  ========================= */
   async function handleGenerateInsight(tc: any) {
     try {
       setLoadingInsight(true);
@@ -139,9 +185,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     PLAYWRIGHT
-  ========================= */
   async function handleRunPlaywright(tc: any) {
     try {
       setPwLoadingId(tc.id);
@@ -159,9 +202,6 @@ export default function TestScenariosPage() {
     downloadPlaywrightSpec(tc);
   }
 
-  /* =========================
-     SINGLE JIRA EXPORT
-  ========================= */
   async function handleExportSingleTestCase(tc: any) {
     try {
       const sourceTc =
@@ -178,9 +218,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     SCENARIO JIRA EXPORT (ASYNC JOB)
-  ========================= */
   async function handleExportWholeScenario() {
     if (!scenario) return;
 
@@ -207,9 +244,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  /* =========================
-     EXPORT STATUS POLLING
-  ========================= */
   useEffect(() => {
     if (!exportJobId) return;
 
@@ -243,9 +277,6 @@ export default function TestScenariosPage() {
     return () => clearInterval(interval);
   }, [exportJobId]);
 
-  /* =========================
-     DERIVED
-  ========================= */
   const isAcceptance = activeTestCase?.id === scenario?.id;
   const hasSteps = Array.isArray(activeTestCase?.steps);
 
@@ -266,23 +297,39 @@ export default function TestScenariosPage() {
       {loading && <LoadingOverlay />}
 
       <div className="max-w-7xl mx-auto space-y-8">
+
+        {/* HEADER */}
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-wide text-white">
+            Testovací scénáře
+          </h1>
+          <p className="text-sm text-slate-400">
+            Zadej záměr a AI navrhne kompletní test design
+          </p>
+        </div>
+
         {/* INPUT */}
         <div>
           <label className="block text-sm text-slate-300 mb-2">
             Testovací záměr
           </label>
-          <textarea
-            value={intent}
-            onChange={(e) => setIntent(e.target.value)}
-            rows={4}
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 p-3 resize-none"
-          />
-          <div className="flex justify-between mt-3">
+
+          <div className="neon-wrap">
+            <textarea
+              value={intent}
+              onChange={(e) => setIntent(e.target.value)}
+              rows={4}
+              placeholder="Popiš, co chceš otestovat…"
+              className="neon-input"
+            />
+          </div>
+
+          <div className="flex justify-between mt-4">
             <button
               onClick={handleGenerateScenario}
-              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
+              className="neon-button neon-pulse"
             >
-              Spustit QA analýzu
+              <span className="relative z-10">Spustit QA analýzu</span>
             </button>
 
             {scenario && (
@@ -298,42 +345,6 @@ export default function TestScenariosPage() {
               </button>
             )}
           </div>
-
-          {/* PROGRESS BAR */}
-          {exportStatus && exportStatus.status === "running" && (
-            <div className="mt-4">
-              <div className="text-xs mb-1 text-slate-400">
-                Export do JIRA: {exportStatus.done} / {exportStatus.total}
-              </div>
-              <div className="w-full bg-slate-800 rounded h-2">
-                <div
-                  className="bg-emerald-500 h-2 rounded transition-all"
-                  style={{
-                    width: `${
-                      exportStatus.total
-                        ? (exportStatus.done / exportStatus.total) * 100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {scenarioJiraResult && (
-            <div className="mt-3 text-sm text-emerald-400">
-              ✅ Epic vytvořen:{" "}
-              <a
-                href={scenarioJiraResult.epic.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline inline-flex items-center gap-1"
-              >
-                {scenarioJiraResult.epic.key}
-                <FaExternalLinkAlt />
-              </a>
-            </div>
-          )}
         </div>
 
         {scenario && activeTestCase && (
@@ -358,9 +369,16 @@ export default function TestScenariosPage() {
                 {activeTestCase.title}
               </h2>
 
-              <span className="inline-block text-xs px-2 py-1 rounded bg-emerald-700/20 text-emerald-400 mb-3">
-                {activeTestCase.type}
-              </span>
+              {(() => {
+              const style = getTestTypeStyle(activeTestCase.type);
+             return (
+             <span
+             className={`inline-block text-xs px-2 py-1 rounded border mb-3 ${style.color}`}
+             >
+              {style.icon} {style.label}
+             </span>
+            );
+            })()}
 
               {singleExport && (
                 <div className="mb-3 text-xs text-emerald-400">
@@ -461,28 +479,44 @@ export default function TestScenariosPage() {
                 </button>
               </div>
 
-              {/* ADDITIONAL */}
+              {/* ADDITIONAL TEST CASES */}
               <div className="mt-6">
-                <h4 className="flex items-center gap-2 text-sm mb-2">
+                <h4 className="flex items-center gap-2 text-sm mb-3">
                   <FaChevronDown /> Další testovací případy (
                   {scenario.additionalTestCases.length})
                 </h4>
 
                 <div className="space-y-2">
-                  {scenario.additionalTestCases.map((tc: any) => (
-                    <button
-                      key={tc.id}
-                      onClick={() => setActiveTestCase(tc)}
-                      className={`w-full text-left p-3 rounded-lg border ${
-                        activeTestCase.id === tc.id
-                          ? "border-indigo-500 bg-slate-800"
-                          : "border-slate-800 bg-slate-950 hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className="text-indigo-400 mr-2">{tc.type}</span>
-                      {tc.title}
-                    </button>
-                  ))}
+                  {scenario.additionalTestCases.map((tc: any) => {
+                    const style = getTestTypeStyle(tc.type);
+
+                    return (
+                      <button
+                        key={tc.id}
+                        onClick={() => setActiveTestCase(tc)}
+                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                          activeTestCase.id === tc.id
+                            ? "border-indigo-500 bg-slate-800 shadow-md shadow-indigo-500/20"
+                            : "border-slate-800 bg-slate-950 hover:bg-slate-900"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+  <span className="w-4 flex items-center justify-center">
+    {style.icon}
+  </span>
+  <span className="text-sm">{tc.title}</span>
+</div>
+
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded border ${style.color}`}
+                          >
+                            {style.label}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -561,6 +595,99 @@ export default function TestScenariosPage() {
           </div>
         )}
       </div>
+
+      {/* STYLES */}
+      <style>{`
+        .neon-wrap {
+          position: relative;
+          border-radius: 14px;
+          padding: 2px;
+          background: linear-gradient(120deg, #4f46e5, #22d3ee, #a855f7);
+        }
+
+        .neon-wrap::before {
+          content: "";
+          position: absolute;
+          inset: -14px;
+          background: linear-gradient(120deg, #4f46e5, #22d3ee, #a855f7);
+          filter: blur(36px);
+          opacity: 0.5;
+          z-index: -1;
+          border-radius: 20px;
+        }
+
+        .neon-input {
+          width: 100%;
+          background: rgba(2, 6, 23, 0.95);
+          border: none;
+          border-radius: 12px;
+          padding: 16px;
+          color: #e5e7eb;
+          resize: none;
+          outline: none;
+        }
+
+        .neon-input::placeholder {
+          color: #64748b;
+        }
+
+        .neon-input:focus {
+          box-shadow: 0 0 14px rgba(99,102,241,0.8);
+        }
+
+        .neon-button {
+          position: relative;
+          padding: 12px 28px;
+          border-radius: 999px;
+          background: linear-gradient(120deg, #4f46e5, #22d3ee, #a855f7);
+          color: white;
+          font-weight: 500;
+          letter-spacing: 0.03em;
+          overflow: hidden;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .neon-button::before {
+          content: "";
+          position: absolute;
+          inset: -10px;
+          background: linear-gradient(120deg, #4f46e5, #22d3ee, #a855f7);
+          filter: blur(28px);
+          opacity: 0.7;
+          z-index: -1;
+        }
+
+        .neon-button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 0 30px rgba(99,102,241,0.8);
+        }
+
+        .neon-button:active {
+          transform: scale(0.97);
+        }
+
+        .neon-pulse {
+          animation: neonPulse 2.8s ease-in-out infinite;
+        }
+
+        @keyframes neonPulse {
+          0% {
+            box-shadow: 0 0 14px rgba(99,102,241,0.6),
+                        0 0 30px rgba(34,211,238,0.4);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 26px rgba(99,102,241,0.9),
+                        0 0 60px rgba(168,85,247,0.6);
+            transform: scale(1.03);
+          }
+          100% {
+            box-shadow: 0 0 14px rgba(99,102,241,0.6),
+                        0 0 30px rgba(34,211,238,0.4);
+            transform: scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
