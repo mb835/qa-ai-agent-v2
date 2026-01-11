@@ -1,18 +1,11 @@
-export type QAInsight = {
-  reasoning: string;
-  coverage: string[];
-  risks: string[];
-  automationTips: string[];
-};
+export type Step =
+  | { action: "goto"; url: string }
+  | { action: "fill"; selector: string; value: string }
+  | { action: "click"; selector: string }
+  | { action: "expect-url"; urlPart: string };
 
 export type TestCase = {
   id: string;
   title: string;
-  description: string;
-  preconditions: string[];
-  steps: string[];
-  expectedResult: string;
-  qaInsight: QAInsight;
-  additionalTestCases: TestCase[];
-  type?: "NEGATIVE" | "EDGE" | "SECURITY" | "UX" | "DATA";
+  steps: Step[];
 };
