@@ -41,11 +41,7 @@ const exportJobs: Record<string, ExportJob> = {};
    PLAYWRIGHT STORE
 ========================= */
 
-const playwrightStore: Record<
-  string,
-  { filename: string; content: string }
-> = {};
-
+const playwrightStore: Record<string, { filename: string; content: string }> = {};
 /* =========================
    HEALTH CHECK
 ========================= */
@@ -306,7 +302,7 @@ function buildPlaywrightTest(testCase: any) {
   await page.waitForTimeout(500);`;
   }).join("\n\n");
 
-  return `
+  return `// @ts-nocheck
 import { test, expect } from '@playwright/test';
 
 test('${testCase.title}', async ({ page }) => {

@@ -488,18 +488,7 @@ export default function TestScenariosPage() {
               </p>
 
               <div className="flex flex-wrap gap-3 mt-4">
-                <button
-                  disabled={!hasSteps}
-                  onClick={() => handleRunPlaywright(activeTestCase)}
-                  className={`px-4 py-2 rounded-lg ${
-                    hasSteps
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-slate-700 cursor-not-allowed"
-                  }`}
-                >
-                  Generovat Playwright test
-                </button>
-
+                
                 <button
                   disabled={!hasSteps}
                   onClick={() => handleDownloadSpec(activeTestCase)}
