@@ -197,7 +197,7 @@ export default function TestScenariosPage() {
       setActiveTestCase((prev: any) => ({ ...prev, qaInsight: data.qaInsight }));
     } catch (e) {
       console.error(e);
-      alert("❌ Chyba při generování Expert QA Insight");
+      alert("❌ Chyba při generování Expertní QA analýza");
     } finally {
       setLoadingInsight(false);
     }
@@ -562,7 +562,7 @@ export default function TestScenariosPage() {
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
               <h3 className="font-semibold flex items-center gap-2 mb-4">
                 <FaLightbulb className="text-yellow-400" />
-                Expert QA Insight
+                Expertní QA analýza
               </h3>
 
               {hasFullInsight ? (

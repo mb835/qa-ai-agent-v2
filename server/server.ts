@@ -16,7 +16,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-console.log("🔥 SERVER VERSION: JIRA EXPORT ASYNC + PROGRESS + PARALLEL AI + PLAYWRIGHT FIX");
+console.log("🔥 SERVER VERSION: CZECH LANGUAGE ENFORCED");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -42,6 +42,7 @@ const exportJobs: Record<string, ExportJob> = {};
 ========================= */
 
 const playwrightStore: Record<string, { filename: string; content: string }> = {};
+
 /* =========================
    HEALTH CHECK
 ========================= */
@@ -72,7 +73,7 @@ function mapTestTypeToCz(type: string) {
 }
 
 /* =========================
-   AI PROMPT – SCENARIO
+   AI PROMPT – SCENARIO (CZECH ENFORCED)
 ========================= */
 function buildScenarioPrompt(intent: string, isRetry = false) {
   return `
@@ -83,6 +84,13 @@ Používáš výhradně Playwright.
 
 ${isRetry ? "POZOR: PŘEDCHOZÍ ODPOVĚĎ BYLA NEÚPLNÁ. ACCEPTANCE TEST MUSÍ MÍT KROKY." : ""}
 
+ZADÁNÍ:
+Vytvoř kompletní testovací scénář na základě záměru: "${intent}"
+
+PRAVIDLA JAZYKA:
+!!! DŮLEŽITÉ: VŠECHNY TEXTOVÉ HODNOTY (title, description, steps, reasoning, atd.) MUSÍ BÝT V ČEŠTINĚ !!!
+!!! NÁZVY TESTŮ I POPISY MUSÍ BÝT ČESKY !!!
+
 Vytvoř:
 - 1 hlavní ACCEPTANCE test
 - 5 dalších testů: NEGATIVE, EDGE, SECURITY, UX, DATA
@@ -90,33 +98,33 @@ Vytvoř:
 KAŽDÝ TEST MUSÍ OBSAHOVAT:
 - id
 - type
-- title
-- description
-- expectedResult
+- title (ČESKY)
+- description (ČESKY)
+- expectedResult (ČESKY)
 - qaInsight:
-  - reasoning
-  - coverage (array)
-  - risks (array)
-  - automationTips (array)
+  - reasoning (ČESKY)
+  - coverage (array, ČESKY)
+  - risks (array, ČESKY)
+  - automationTips (array, ČESKY)
 
 POVINNÉ:
 - ACCEPTANCE test MUSÍ mít:
-  - preconditions (array)
-  - steps (array, min. 5 kroků)
+  - preconditions (array, ČESKY)
+  - steps (array, min. 5 kroků, ČESKY)
 
 DALŠÍ TESTY:
-- NESMÍ obsahovat kroky
+- NESMÍ obsahovat kroky (steps bude prázdné pole)
 
 STRUKTURA:
 {
   "testCase": {
     "id": "TC-ACC-001",
     "type": "ACCEPTANCE",
-    "title": "",
-    "description": "",
+    "title": "Zde bude český název testu",
+    "description": "Zde bude český popis",
     "preconditions": [],
     "steps": [],
-    "expectedResult": "",
+    "expectedResult": "Očekávaný výsledek česky",
     "qaInsight": {
       "reasoning": "",
       "coverage": [],
@@ -126,9 +134,6 @@ STRUKTURA:
     "additionalTestCases": []
   }
 }
-
-TESTOVACÍ ZÁMĚR:
-"${intent}"
 `;
 }
 
@@ -163,7 +168,7 @@ async function generateScenarioWithRetry(intent: string) {
       temperature: isRetry ? 0.1 : 0.25,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "Odpověz výhradně jako validní JSON objekt." },
+        { role: "system", content: "Odpověz výhradně jako validní JSON objekt. Veškerý obsah generuj v českém jazyce." },
         { role: "user", content: buildScenarioPrompt(intent, isRetry) },
       ],
     });
@@ -179,6 +184,14 @@ async function generateScenarioWithRetry(intent: string) {
 
     const steps = parsed?.testCase?.steps;
     if (Array.isArray(steps) && steps.length >= 5) {
+      
+      // ✅ OPRAVA: Odstranění čísel z kroků
+      if (parsed.testCase && Array.isArray(parsed.testCase.steps)) {
+        parsed.testCase.steps = parsed.testCase.steps.map((step: string) => 
+          step.replace(/^\d+\.\s*/, "")
+        );
+      }
+
       return {
         ...parsed,
         meta: { aiStatus: attempt === 0 ? "ok" : "retried" },
@@ -201,7 +214,8 @@ VRAŤ POUZE VALIDNÍ JSON.
 Jsi senior QA automation expert.
 Používáš Playwright.
 
-Vygeneruj kroky pro test:
+ÚKOL: Vygeneruj kroky pro test.
+!!! VÝSTUP MUSÍ BÝT V ČEŠTINĚ !!!
 
 TYP: ${testCase.type}
 NÁZEV: ${testCase.title}
@@ -209,8 +223,8 @@ POPIS: ${testCase.description}
 
 STRUKTURA:
 {
-  "steps": ["string"],
-  "expectedResult": "string"
+  "steps": ["Krok 1 česky", "Krok 2 česky"],
+  "expectedResult": "Očekávaný výsledek česky"
 }
 `;
 
@@ -219,7 +233,7 @@ STRUKTURA:
     temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: "Odpověz pouze jako JSON." },
+      { role: "system", content: "Odpověz pouze jako JSON. Všechny texty musí být česky." },
       { role: "user", content: prompt },
     ],
   });
@@ -229,9 +243,14 @@ STRUKTURA:
 
   const parsed = JSON.parse(content);
 
+  // ✅ OPRAVA: Odstranění čísel z kroků
+  const cleanSteps = parsed.steps?.map((step: string) => 
+    step.replace(/^\d+\.\s*/, "")
+  ) || [];
+
   return {
     ...testCase,
-    steps: parsed.steps,
+    steps: cleanSteps,
     expectedResult: parsed.expectedResult || testCase.expectedResult,
   };
 }
@@ -242,7 +261,8 @@ VRAŤ POUZE VALIDNÍ JSON.
 
 Jsi senior QA expert.
 
-Dopočítej Expert QA Insight pro test:
+ÚKOL: Dopočítej Expertní QA analýzu pro test.
+!!! VÝSTUP MUSÍ BÝT V ČEŠTINĚ !!!
 
 TYP: ${testCase.type}
 NÁZEV: ${testCase.title}
@@ -250,10 +270,10 @@ POPIS: ${testCase.description}
 
 STRUKTURA:
 {
-  "reasoning": "",
-  "coverage": [],
-  "risks": [],
-  "automationTips": []
+  "reasoning": "Důvod česky",
+  "coverage": ["Položka 1 česky"],
+  "risks": ["Riziko 1 česky"],
+  "automationTips": ["Tip 1 česky"]
 }
 `;
 
@@ -262,7 +282,7 @@ STRUKTURA:
     temperature: 0.25,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: "Odpověz pouze jako JSON." },
+      { role: "system", content: "Odpověz pouze jako JSON. Všechny texty musí být česky." },
       { role: "user", content: prompt },
     ],
   });
@@ -426,7 +446,7 @@ function buildJiraADF(testCase: any) {
   content.push(paragraph(testCase.expectedResult || ""));
 
   if (testCase.qaInsight) {
-    content.push(heading("Expert QA Insight"));
+    content.push(heading("Expertní QA analýza"));
 
     content.push(heading("Proč je test klíčový"));
     content.push(paragraph(testCase.qaInsight.reasoning || ""));

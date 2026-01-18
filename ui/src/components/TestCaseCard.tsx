@@ -52,12 +52,12 @@ export default function TestCaseCard({ testCase, onGeneratePlaywright }: Props) 
             Generate Playwright
           </button>
 
-          {/* EXPERT QA INSIGHT */}
+          {/* Expertní QA analýza */}
           {testCase.qaInsight && (
             <div className="border-t border-slate-800 pt-4">
               <h4 className="font-semibold flex items-center gap-2 mb-2">
                 <FaLightbulb className="text-yellow-400" />
-                Expert QA Insight
+                Expertní QA analýza
               </h4>
 
               <p className="text-sm text-slate-300 mb-3">

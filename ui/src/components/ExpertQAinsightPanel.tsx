@@ -20,7 +20,7 @@ export default function ExpertQAInsightPanel({ insight }: Props) {
     <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 h-full">
       <h3 className="font-semibold flex items-center gap-2 mb-4 text-lg">
         <FaLightbulb className="text-yellow-400" />
-        Expert QA Insight
+        Expertní QA analýza
       </h3>
 
       {/* REASONING */}
