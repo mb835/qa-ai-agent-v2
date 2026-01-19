@@ -38,32 +38,27 @@ type ScenarioJiraResult = {
   tasks: { id: string; key: string; url: string }[];
 };
 
-// --- HOOK PRO ANIMOVANÝ PLACEHOLDER (S DETEKCÍ PAUZY) ---
-const useTypewriter = (texts: string[], speed = 50, pause = 3000) => {
+// --- HOOK PRO ANIMOVANÝ PLACEHOLDER ---
+const useTypewriter = (texts: string[], speed = 30, pause = 1500) => {
   const [displayedText, setDisplayedText] = useState("");
   const [index, setIndex] = useState(0);
   const [subIndex, setSubIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isPaused, setIsPaused] = useState(false); // Nový stav pro detekci pauzy
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
-    // Rychlost mazání je 4x vyšší
     const typeSpeed = isDeleting ? speed / 4 : speed;
 
     const timeout = setTimeout(() => {
-      // 1. Fáze: Mazání
       if (isDeleting) {
         setDisplayedText((prev) => prev.substring(0, prev.length - 1));
         setIsPaused(false);
-      } 
-      // 2. Fáze: Psaní
-      else {
+      } else {
         setDisplayedText((prev) => texts[index].substring(0, subIndex + 1));
       }
 
-      // Kdy nastane pauza (text je dopsaný)
       if (!isDeleting && subIndex === texts[index].length) {
-        setIsPaused(true); // Jsme v pauze, zobrazíme tlačítko
+        setIsPaused(true);
         setTimeout(() => {
             setIsPaused(false);
             setIsDeleting(true);
@@ -71,7 +66,6 @@ const useTypewriter = (texts: string[], speed = 50, pause = 3000) => {
         return;
       }
 
-      // Kdy je smazáno a jdeme na další text
       if (isDeleting && displayedText === "") {
         setIsDeleting(false);
         setIndex((prev) => (prev + 1) % texts.length);
@@ -87,12 +81,7 @@ const useTypewriter = (texts: string[], speed = 50, pause = 3000) => {
     return () => clearTimeout(timeout);
   }, [subIndex, isDeleting, index, texts, speed, pause, displayedText]);
 
-  // Vracíme i celý text a stav pauzy
-  return { 
-    displayedText, 
-    currentFullText: texts[index], 
-    isPaused 
-  };
+  return { displayedText, currentFullText: texts[index], isPaused };
 };
 
 /* =========================
@@ -135,24 +124,19 @@ export default function TestScenariosPage() {
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<any>(null);
 
-  // --- ANIMATED PLACEHOLDER KONFIGURACE ---
-  // pause: 4000ms (4 sekundy) aby měl uživatel čas kliknout na tlačítko
   const { displayedText, currentFullText, isPaused } = useTypewriter([
     "Jako neregistrovaný uživatel vyhledej 'herní notebook', vyfiltruj pouze značku ASUS s cenou nad 30 000 Kč, přidej ho do košíku, v košíku přidej ještě pojištění proti rozbití, uplatni slevový kód 'SLEVA2024' a dokonči objednávku s doručením na pobočku...",
-    "Jako uživatel chci mít možnost resetovat heslo pomocí e-mailového odkazu...",
-    "Ověř zabezpečení API endpointu /login proti SQL Injection a Brute Force útokům...",
-    "Zkontroluj validaci registračního formuláře při zadání neplatných dat (špatný formát e-mailu, krátké heslo)...",
-    "Otestuj chování košíku při přidání 999 kusů produktu a následném odebrání...",
-    "Ověř, že uživatel s rolí 'Editor' nemá přístup do sekce 'Nastavení uživatelů'...",
-    "Zkontroluj, zda se správně načítají data v offline režimu u mobilní aplikace...",
-    "Proveď vizuální testy responzivity stránky na rozlišení iPhone 14 Pro a iPad Air...",
-    "Otestuj platební bránu: Zamítnutá platba kartou z důvodu nedostatku prostředků...",
-    "Ověř funkčnost filtrování produktů podle parametrů (barva, velikost, materiál)..."
+    "Jako uživatel chci mít možnost resetovat heslo pomocí e-mailového odkazu s platností 30 minut...",
+    "Ověř zabezpečení přihlašovacího formuláře proti útokům hrubou silou (Brute Force) a SQL Injection...",
+    "Zkontroluj validaci formuláře pro zadání IBAN a SWIFT kódu při zahraniční platbě...",
+    "Otestuj hraniční případ: Přidej do košíku 999 kusů produktu a ověř výpočet ceny dopravy...",
+    "Jako uživatel s rolí 'Editor' se pokus smazat účet 'Administrátora' (očekáváno zamítnutí přístupu)...",
+    "Ověř responzivitu a funkčnost checkout procesu na mobilním zařízení (viewport iPhone 14 Pro)...",
+    "Otestuj API endpoint /api/v1/orders: Odošli POST request s neplatným autentizačním tokenem...",
+    "Zkontroluj chování aplikace při výpadku internetového připojení během odesílání formuláře...",
+    "Ověř lokalizaci: Přepni aplikaci do němčiny a zkontroluj formátování měny a data..."
   ], 15, 4000); 
 
-  /* =========================
-      STAV EXPORTU
-  ========================= */
   const isScenarioExportRunning = scenarioExportLoading || exportStatus?.status === "running";
   const isScenarioAlreadyExported = !!scenarioJiraResult;
   const blockSingleExport = isScenarioExportRunning || isScenarioAlreadyExported;
@@ -161,7 +145,6 @@ export default function TestScenariosPage() {
       ? Math.round((exportStatus.done / exportStatus.total) * 100)
       : 0;
 
-  // --- LOGIKA PRO ZOBRAZENÍ ČÁSTEČNÉ ANALÝZY ---
   const hasInsightObject = !!activeTestCase?.qaInsight;
   const isFullInsight = hasInsightObject && 
                         activeTestCase.qaInsight.risks && activeTestCase.qaInsight.risks.length > 0 &&
@@ -169,7 +152,6 @@ export default function TestScenariosPage() {
 
   async function handleGenerateScenario() {
     if (!intent.trim()) return;
-
     try {
       setLoading(true);
       const data = await generateScenario(intent);
@@ -187,7 +169,6 @@ export default function TestScenariosPage() {
     }
   }
 
-  // Funkce pro rychlé vložení textu z placeholderu
   function handleUseExample() {
     setIntent(currentFullText);
   }
@@ -197,7 +178,6 @@ export default function TestScenariosPage() {
       setLoadingStepsId(tc.id);
       const sourceTc = scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
       const data = await generateAdditionalSteps(sourceTc);
-
       setScenario((prev: any) => ({
         ...prev,
         additionalTestCases: prev.additionalTestCases.map((t: any) =>
@@ -218,7 +198,6 @@ export default function TestScenariosPage() {
       setLoadingInsight(true);
       const sourceTc = scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
       const data = await generateExpertInsight(sourceTc);
-
       setScenario((prev: any) => {
         if (prev.id === tc.id) return { ...prev, qaInsight: data.qaInsight };
         return {
@@ -228,7 +207,6 @@ export default function TestScenariosPage() {
           ),
         };
       });
-
       setActiveTestCase((prev: any) => ({ ...prev, qaInsight: data.qaInsight }));
     } catch (e) {
       console.error(e);
@@ -276,13 +254,11 @@ export default function TestScenariosPage() {
       setScenarioExportLoading(true);
       setScenarioJiraResult(null);
       setExportStatus(null);
-
       const res = await fetch("http://localhost:3000/api/integrations/jira/export-scenario", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ testCase: scenario }),
       });
-
       const data = await res.json();
       setExportJobId(data.jobId);
     } catch (e) {
@@ -338,13 +314,12 @@ export default function TestScenariosPage() {
           </p>
         </div>
 
-        {/* INPUT SEKCIA */}
+        {/* INPUT */}
         <div>
           <label className="block text-sm text-slate-300 mb-2 text-left">
             Testovací záměr
           </label>
 
-          {/* Wrapper pro textarea a plovoucí tlačítko */}
           <div className="neon-wrap relative group">
             <textarea
               value={intent}
@@ -353,8 +328,6 @@ export default function TestScenariosPage() {
               placeholder={displayedText}
               className="neon-input"
             />
-            
-            {/* Tlačítko pro rychlé vložení scénáře - zobrazí se jen když je intent prázdný a je pauza */}
             {!intent && isPaused && (
                 <button 
                     onClick={handleUseExample}
@@ -412,19 +385,21 @@ export default function TestScenariosPage() {
         {scenario && activeTestCase && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 text-left">
             {/* LEFT */}
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 relative">
-              <div className="absolute top-4 right-4">
+            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
+              {/* HEADER ROW - FLEXBOX FIX */}
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  {!isAcceptance && (
+                    <button
+                      onClick={() => setActiveTestCase(scenario)}
+                      className="flex items-center gap-2 text-sm text-indigo-400 hover:underline"
+                    >
+                      <FaArrowLeft /> Zpět na hlavní akceptační test
+                    </button>
+                  )}
+                </div>
                 <AiGeneratedBadge />
               </div>
-
-              {!isAcceptance && (
-                <button
-                  onClick={() => setActiveTestCase(scenario)}
-                  className="mb-4 flex items-center gap-2 text-sm text-indigo-400 hover:underline"
-                >
-                  <FaArrowLeft /> Zpět na hlavní akceptační test
-                </button>
-              )}
 
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-1">
                 <FaClipboardList />
@@ -507,7 +482,6 @@ export default function TestScenariosPage() {
               </p>
 
               <div className="flex flex-wrap gap-3 mt-4">
-                
                 <button
                   disabled={!hasSteps}
                   onClick={() => handleDownloadSpec(activeTestCase)}
