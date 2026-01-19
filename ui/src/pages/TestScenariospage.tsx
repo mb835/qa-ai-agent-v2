@@ -14,6 +14,9 @@ import {
   FaDownload,
   FaJira,
   FaExternalLinkAlt,
+  FaTerminal,
+  FaRedo,
+  FaArrowRight
 } from "react-icons/fa";
 
 import {
@@ -21,7 +24,6 @@ import {
   generateAdditionalSteps,
   generateExpertInsight,
   downloadPlaywrightSpec,
-  exportScenarioToJira,
   exportToJira,
 } from "../api/scenariosApi";
 
@@ -36,59 +38,82 @@ type ScenarioJiraResult = {
   tasks: { id: string; key: string; url: string }[];
 };
 
+// --- HOOK PRO ANIMOVANÝ PLACEHOLDER (S DETEKCÍ PAUZY) ---
+const useTypewriter = (texts: string[], speed = 50, pause = 3000) => {
+  const [displayedText, setDisplayedText] = useState("");
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false); // Nový stav pro detekci pauzy
+
+  useEffect(() => {
+    // Rychlost mazání je 4x vyšší
+    const typeSpeed = isDeleting ? speed / 4 : speed;
+
+    const timeout = setTimeout(() => {
+      // 1. Fáze: Mazání
+      if (isDeleting) {
+        setDisplayedText((prev) => prev.substring(0, prev.length - 1));
+        setIsPaused(false);
+      } 
+      // 2. Fáze: Psaní
+      else {
+        setDisplayedText((prev) => texts[index].substring(0, subIndex + 1));
+      }
+
+      // Kdy nastane pauza (text je dopsaný)
+      if (!isDeleting && subIndex === texts[index].length) {
+        setIsPaused(true); // Jsme v pauze, zobrazíme tlačítko
+        setTimeout(() => {
+            setIsPaused(false);
+            setIsDeleting(true);
+        }, pause);
+        return;
+      }
+
+      // Kdy je smazáno a jdeme na další text
+      if (isDeleting && displayedText === "") {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % texts.length);
+        setSubIndex(0);
+        return;
+      }
+
+      const nextSubIndex = isDeleting ? subIndex - 1 : subIndex + 1;
+      setSubIndex(nextSubIndex);
+
+    }, typeSpeed);
+
+    return () => clearTimeout(timeout);
+  }, [subIndex, isDeleting, index, texts, speed, pause, displayedText]);
+
+  // Vracíme i celý text a stav pauzy
+  return { 
+    displayedText, 
+    currentFullText: texts[index], 
+    isPaused 
+  };
+};
+
 /* =========================
-   TEST TYPE STYLES
+   STYLY TYPŮ TESTŮ
 ========================= */
 function getTestTypeStyle(type: string) {
   switch (type?.toLowerCase()) {
     case "acceptance":
-      return {
-        label: "Akceptační",
-        color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40",
-        icon: "✅",
-      };
-
+      return { label: "Akceptační", color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40", icon: "✅" };
     case "negative":
-      return {
-        label: "Negativní",
-        color: "text-red-400 bg-red-500/15 border-red-500/40",
-        icon: "⚠",
-      };
-
+      return { label: "Negativní", color: "text-red-400 bg-red-500/15 border-red-500/40", icon: "⚠" };
     case "edge":
-      return {
-        label: "Hraniční",
-        color: "text-amber-400 bg-amber-500/15 border-amber-500/40",
-        icon: "🧪",
-      };
-
+      return { label: "Hraniční", color: "text-amber-400 bg-amber-500/15 border-amber-500/40", icon: "🧪" };
     case "security":
-      return {
-        label: "Bezpečnostní",
-        color: "text-purple-400 bg-purple-500/15 border-purple-500/40",
-        icon: "🔒",
-      };
-
+      return { label: "Bezpečnostní", color: "text-purple-400 bg-purple-500/15 border-purple-500/40", icon: "🔒" };
     case "ux":
-      return {
-        label: "Uživatelský (UX)",
-        color: "text-sky-400 bg-sky-500/15 border-sky-500/40",
-        icon: "👁",
-      };
-
+      return { label: "Uživatelský (UX)", color: "text-sky-400 bg-sky-500/15 border-sky-500/40", icon: "👁" };
     case "data":
-      return {
-        label: "Datový",
-        color: "text-indigo-400 bg-indigo-500/15 border-indigo-500/40",
-        icon: "🗄",
-      };
-
+      return { label: "Datový", color: "text-indigo-400 bg-indigo-500/15 border-indigo-500/40", icon: "🗄" };
     default:
-      return {
-        label: type?.toUpperCase() || "Test",
-        color: "text-slate-400 bg-slate-500/10 border-slate-500/30",
-        icon: "🧩",
-      };
+      return { label: type?.toUpperCase() || "Test", color: "text-slate-400 bg-slate-500/10 border-slate-500/30", icon: "🧩" };
   }
 }
 
@@ -103,31 +128,44 @@ export default function TestScenariosPage() {
   const [pwLoadingId, setPwLoadingId] = useState<string | null>(null);
 
   const [scenarioExportLoading, setScenarioExportLoading] = useState(false);
-  const [scenarioJiraResult, setScenarioJiraResult] =
-    useState<ScenarioJiraResult | null>(null);
+  const [scenarioJiraResult, setScenarioJiraResult] = useState<ScenarioJiraResult | null>(null);
 
-  const [singleJiraResults, setSingleJiraResults] = useState<
-    Record<string, JiraIssue>
-  >({});
+  const [singleJiraResults, setSingleJiraResults] = useState<Record<string, JiraIssue>>({});
 
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<any>(null);
 
+  // --- ANIMATED PLACEHOLDER KONFIGURACE ---
+  // pause: 4000ms (4 sekundy) aby měl uživatel čas kliknout na tlačítko
+  const { displayedText, currentFullText, isPaused } = useTypewriter([
+    "Jako neregistrovaný uživatel vyhledej 'herní notebook', vyfiltruj pouze značku ASUS s cenou nad 30 000 Kč, přidej ho do košíku, v košíku přidej ještě pojištění proti rozbití, uplatni slevový kód 'SLEVA2024' a dokonči objednávku s doručením na pobočku...",
+    "Jako uživatel chci mít možnost resetovat heslo pomocí e-mailového odkazu...",
+    "Ověř zabezpečení API endpointu /login proti SQL Injection a Brute Force útokům...",
+    "Zkontroluj validaci registračního formuláře při zadání neplatných dat (špatný formát e-mailu, krátké heslo)...",
+    "Otestuj chování košíku při přidání 999 kusů produktu a následném odebrání...",
+    "Ověř, že uživatel s rolí 'Editor' nemá přístup do sekce 'Nastavení uživatelů'...",
+    "Zkontroluj, zda se správně načítají data v offline režimu u mobilní aplikace...",
+    "Proveď vizuální testy responzivity stránky na rozlišení iPhone 14 Pro a iPad Air...",
+    "Otestuj platební bránu: Zamítnutá platba kartou z důvodu nedostatku prostředků...",
+    "Ověř funkčnost filtrování produktů podle parametrů (barva, velikost, materiál)..."
+  ], 15, 4000); 
+
   /* =========================
-     DERIVED EXPORT STATE
+      STAV EXPORTU
   ========================= */
-  const isScenarioExportRunning =
-    scenarioExportLoading || exportStatus?.status === "running";
-
+  const isScenarioExportRunning = scenarioExportLoading || exportStatus?.status === "running";
   const isScenarioAlreadyExported = !!scenarioJiraResult;
+  const blockSingleExport = isScenarioExportRunning || isScenarioAlreadyExported;
 
-  const blockSingleExport =
-    isScenarioExportRunning || isScenarioAlreadyExported;
-
-  const exportProgress =
-    exportStatus?.total > 0
+  const exportProgress = exportStatus?.total > 0
       ? Math.round((exportStatus.done / exportStatus.total) * 100)
       : 0;
+
+  // --- LOGIKA PRO ZOBRAZENÍ ČÁSTEČNÉ ANALÝZY ---
+  const hasInsightObject = !!activeTestCase?.qaInsight;
+  const isFullInsight = hasInsightObject && 
+                        activeTestCase.qaInsight.risks && activeTestCase.qaInsight.risks.length > 0 &&
+                        activeTestCase.qaInsight.coverage && activeTestCase.qaInsight.coverage.length > 0;
 
   async function handleGenerateScenario() {
     if (!intent.trim()) return;
@@ -149,13 +187,15 @@ export default function TestScenariosPage() {
     }
   }
 
+  // Funkce pro rychlé vložení textu z placeholderu
+  function handleUseExample() {
+    setIntent(currentFullText);
+  }
+
   async function handleGenerateSteps(tc: any) {
     try {
       setLoadingStepsId(tc.id);
-
-      const sourceTc =
-        scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
-
+      const sourceTc = scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
       const data = await generateAdditionalSteps(sourceTc);
 
       setScenario((prev: any) => ({
@@ -164,7 +204,6 @@ export default function TestScenariosPage() {
           t.id === tc.id ? { ...t, ...data } : t
         ),
       }));
-
       setActiveTestCase((prev: any) => ({ ...prev, ...data }));
     } catch (e) {
       console.error(e);
@@ -177,15 +216,11 @@ export default function TestScenariosPage() {
   async function handleGenerateInsight(tc: any) {
     try {
       setLoadingInsight(true);
-
-      const sourceTc =
-        scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
-
+      const sourceTc = scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
       const data = await generateExpertInsight(sourceTc);
 
       setScenario((prev: any) => {
         if (prev.id === tc.id) return { ...prev, qaInsight: data.qaInsight };
-
         return {
           ...prev,
           additionalTestCases: prev.additionalTestCases.map((t: any) =>
@@ -197,7 +232,7 @@ export default function TestScenariosPage() {
       setActiveTestCase((prev: any) => ({ ...prev, qaInsight: data.qaInsight }));
     } catch (e) {
       console.error(e);
-      alert("❌ Chyba při generování Expertní QA analýza");
+      alert("❌ Chyba při generování Expertní QA analýzy");
     } finally {
       setLoadingInsight(false);
     }
@@ -222,11 +257,8 @@ export default function TestScenariosPage() {
 
   async function handleExportSingleTestCase(tc: any) {
     if (blockSingleExport) return;
-
     try {
-      const sourceTc =
-        scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
-
+      const sourceTc = scenario?.additionalTestCases?.find((t: any) => t.id === tc.id) || tc;
       const result = await exportToJira(sourceTc);
       setSingleJiraResults((prev) => ({
         ...prev,
@@ -240,20 +272,16 @@ export default function TestScenariosPage() {
 
   async function handleExportWholeScenario() {
     if (!scenario || isScenarioExportRunning) return;
-
     try {
       setScenarioExportLoading(true);
       setScenarioJiraResult(null);
       setExportStatus(null);
 
-      const res = await fetch(
-        "http://localhost:3000/api/integrations/jira/export-scenario",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ testCase: scenario }),
-        }
-      );
+      const res = await fetch("http://localhost:3000/api/integrations/jira/export-scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testCase: scenario }),
+      });
 
       const data = await res.json();
       setExportJobId(data.jobId);
@@ -266,50 +294,32 @@ export default function TestScenariosPage() {
 
   useEffect(() => {
     if (!exportJobId) return;
-
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(
-          `http://localhost:3000/api/integrations/jira/export-status/${exportJobId}`
-        );
+        const res = await fetch(`http://localhost:3000/api/integrations/jira/export-status/${exportJobId}`);
         const data = await res.json();
-
         setExportStatus(data);
-
         if (data.status === "done") {
           setScenarioJiraResult(data.result || null);
           setScenarioExportLoading(false);
           clearInterval(interval);
         }
-
         if (data.status === "error") {
           alert("❌ Export do JIRA selhal – zkontroluj backend log");
           setScenarioExportLoading(false);
           clearInterval(interval);
         }
       } catch (err) {
-        console.error("Polling failed:", err);
         setScenarioExportLoading(false);
         clearInterval(interval);
       }
     }, 600);
-
     return () => clearInterval(interval);
   }, [exportJobId]);
 
   const isAcceptance = activeTestCase?.id === scenario?.id;
   const hasSteps = Array.isArray(activeTestCase?.steps);
-
-  const hasFullInsight =
-    activeTestCase?.qaInsight &&
-    activeTestCase.qaInsight.reasoning &&
-    activeTestCase.qaInsight.coverage?.length > 0 &&
-    activeTestCase.qaInsight.risks?.length > 0 &&
-    activeTestCase.qaInsight.automationTips?.length > 0;
-
-  const taskForActive =
-    scenarioJiraResult?.tasks?.find((t) => t.id === activeTestCase?.id) || null;
-
+  const taskForActive = scenarioJiraResult?.tasks?.find((t) => t.id === activeTestCase?.id) || null;
   const singleExport = singleJiraResults[activeTestCase?.id];
 
   return (
@@ -320,31 +330,41 @@ export default function TestScenariosPage() {
 
         {/* HEADER */}
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-wide text-white">
+          <h1 className="text-2xl font-semibold tracking-wide text-white text-left">
             Testovací scénáře
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 text-left">
             Zadej záměr a AI navrhne kompletní test design
           </p>
         </div>
 
-        {/* INPUT */}
+        {/* INPUT SEKCIA */}
         <div>
-          <label className="block text-sm text-slate-300 mb-2">
+          <label className="block text-sm text-slate-300 mb-2 text-left">
             Testovací záměr
           </label>
 
-          <div className="neon-wrap">
+          {/* Wrapper pro textarea a plovoucí tlačítko */}
+          <div className="neon-wrap relative group">
             <textarea
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
               rows={4}
-              placeholder="Popiš, co chceš otestovat…"
+              placeholder={displayedText}
               className="neon-input"
             />
+            
+            {/* Tlačítko pro rychlé vložení scénáře - zobrazí se jen když je intent prázdný a je pauza */}
+            {!intent && isPaused && (
+                <button 
+                    onClick={handleUseExample}
+                    className="absolute bottom-4 right-4 bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-sm transition-all animate-fade-in shadow-lg border border-white/10 z-10"
+                >
+                    Použít tento scénář <FaArrowRight />
+                </button>
+            )}
           </div>
 
-          {/* BUTTON ROW */}
           <div className="flex justify-between items-start mt-4 gap-4">
             <button
               onClick={handleGenerateScenario}
@@ -354,11 +374,11 @@ export default function TestScenariosPage() {
             </button>
 
             {scenario && (
-              <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-col items-end gap-2 text-left">
                 <button
                   onClick={handleExportWholeScenario}
                   disabled={isScenarioExportRunning}
-                  className={`px-5 py-2 rounded-lg ${
+                  className={`px-5 py-2 rounded-lg text-white ${
                     isScenarioExportRunning
                       ? "bg-slate-700 cursor-not-allowed"
                       : "bg-emerald-600 hover:bg-emerald-700"
@@ -388,10 +408,9 @@ export default function TestScenariosPage() {
           </div>
         </div>
 
-        {/* ZBYTEK STRÁNKY ZŮSTÁVÁ BEZE ZMĚN */}
-
+        {/* RESULTS GRID */}
         {scenario && activeTestCase && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 text-left">
             {/* LEFT */}
             <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 relative">
               <div className="absolute top-4 right-4">
@@ -475,10 +494,10 @@ export default function TestScenariosPage() {
               ) : (
                 <button
                   onClick={() => handleGenerateSteps(activeTestCase)}
-                  className="text-sm px-3 py-2 rounded bg-slate-800 hover:bg-slate-700"
+                  className="text-sm px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 text-white"
                 >
                   <FaMagic className="inline mr-2" />
-                  Generovat kroky
+                  Generuj kroky
                 </button>
               )}
 
@@ -492,7 +511,7 @@ export default function TestScenariosPage() {
                 <button
                   disabled={!hasSteps}
                   onClick={() => handleDownloadSpec(activeTestCase)}
-                  className={`px-4 py-2 rounded-lg ${
+                  className={`px-4 py-2 rounded-lg text-white ${
                     hasSteps
                       ? "bg-indigo-600 hover:bg-indigo-700"
                       : "bg-slate-700 cursor-not-allowed"
@@ -505,14 +524,14 @@ export default function TestScenariosPage() {
                 <button
                   disabled={blockSingleExport}
                   onClick={() => handleExportSingleTestCase(activeTestCase)}
-                  className={`px-4 py-2 rounded-lg ${
+                  className={`px-4 py-2 rounded-lg text-white ${
                     blockSingleExport
                       ? "bg-slate-700 cursor-not-allowed"
                       : "bg-amber-600 hover:bg-amber-700"
                   }`}
                 >
                   <FaJira className="inline mr-2" />
-                  Exportovat test case do JIRA
+                  Exportuj do JIRA
                 </button>
               </div>
 
@@ -542,7 +561,7 @@ export default function TestScenariosPage() {
                             <span className="w-4 flex items-center justify-center">
                               {style.icon}
                             </span>
-                            <span className="text-sm">{tc.title}</span>
+                            <span className="text-sm text-white">{tc.title}</span>
                           </div>
 
                           <span
@@ -558,75 +577,113 @@ export default function TestScenariosPage() {
               </div>
             </div>
 
-            {/* RIGHT */}
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6">
-              <h3 className="font-semibold flex items-center gap-2 mb-4">
+            {/* RIGHT SIDE: EXPERT QA ANALYSIS */}
+            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 text-left">
+              <h3 className="font-semibold flex items-center gap-2 mb-4 text-white">
                 <FaLightbulb className="text-yellow-400" />
                 Expertní QA analýza
               </h3>
 
-              {hasFullInsight ? (
-                <div className="space-y-6 text-sm">
-                  <section>
-                    <h4 className="flex items-center gap-2 font-semibold mb-1">
-                      <FaBullseye className="text-indigo-400" />
-                      Proč je test klíčový
-                    </h4>
-                    <p>{activeTestCase.qaInsight.reasoning}</p>
-                  </section>
+              {hasInsightObject ? (
+                <div className="space-y-6 text-sm text-white">
+                  
+                  {activeTestCase.qaInsight.reasoning && (
+                    <section>
+                        <h4 className="flex items-center gap-2 font-semibold mb-1">
+                        <FaBullseye className="text-indigo-400" />
+                        Proč je test klíčový
+                        </h4>
+                        <p className="text-slate-300">{activeTestCase.qaInsight.reasoning}</p>
+                    </section>
+                  )}
 
-                  <section>
-                    <h4 className="flex items-center gap-2 font-semibold mb-1">
-                      <FaCheckCircle className="text-emerald-400" />
-                      Pokrytí
-                    </h4>
-                    <ul className="list-disc list-inside">
-                      {activeTestCase.qaInsight.coverage.map(
-                        (c: string, i: number) => (
-                          <li key={i}>{c}</li>
-                        )
-                      )}
-                    </ul>
-                  </section>
+                  {activeTestCase.qaInsight.coverage?.length > 0 && (
+                    <section>
+                        <h4 className="flex items-center gap-2 font-semibold mb-1 text-white">
+                        <FaCheckCircle className="text-emerald-400" />
+                        Pokrytí
+                        </h4>
+                        <ul className="list-disc list-inside text-slate-300">
+                        {activeTestCase.qaInsight.coverage.map(
+                            (c: string, i: number) => (
+                            <li key={i}>{c}</li>
+                            )
+                        )}
+                        </ul>
+                    </section>
+                  )}
 
-                  <section>
-                    <h4 className="flex items-center gap-2 font-semibold mb-1">
-                      <FaExclamationTriangle className="text-amber-400" />
-                      Rizika
-                    </h4>
-                    <ul className="list-disc list-inside">
-                      {activeTestCase.qaInsight.risks.map(
-                        (r: string, i: number) => (
-                          <li key={i}>{r}</li>
-                        )
-                      )}
-                    </ul>
-                  </section>
+                  {activeTestCase.qaInsight.risks?.length > 0 && (
+                    <section>
+                        <h4 className="flex items-center gap-2 font-semibold mb-1 text-white">
+                        <FaExclamationTriangle className="text-amber-400" />
+                        Rizika
+                        </h4>
+                        <ul className="list-disc list-inside text-slate-300">
+                        {activeTestCase.qaInsight.risks.map(
+                            (r: string, i: number) => (
+                            <li key={i}>{r}</li>
+                            )
+                        )}
+                        </ul>
+                    </section>
+                  )}
 
-                  <section>
-                    <h4 className="flex items-center gap-2 font-semibold mb-1">
-                      <FaRobot className="text-indigo-400" />
-                      Doporučení pro Playwright
-                    </h4>
-                    <ul className="list-disc list-inside">
-                      {activeTestCase.qaInsight.automationTips.map(
-                        (t: string, i: number) => (
-                          <li key={i}>{t}</li>
-                        )
-                      )}
-                    </ul>
-                  </section>
+                  {activeTestCase.qaInsight.automationTips?.length > 0 && (
+                    <section>
+                        <h4 className="flex items-center gap-2 font-semibold mb-1 text-white">
+                        <FaRobot className="text-indigo-400" />
+                        Doporučení pro Playwright
+                        </h4>
+                        <ul className="list-disc list-inside text-slate-300">
+                        {activeTestCase.qaInsight.automationTips.map(
+                            (t: string, i: number) => (
+                            <li key={i} className="flex gap-2 items-start">
+                                <span className="mt-1"><FaTerminal className="text-[10px]" /></span>
+                                {t}
+                            </li>
+                            )
+                        )}
+                        </ul>
+                    </section>
+                  )}
+
+                  {!isFullInsight && (
+                    <div className="pt-8 mt-4 border-t border-white/5 text-center">
+                        <p className="text-[10px] font-bold text-zinc-500 mb-4 uppercase tracking-widest">
+                            Chybí detailní analýza rizik a automatizace?
+                        </p>
+                        <button 
+                            onClick={() => handleGenerateInsight(activeTestCase)} 
+                            disabled={loadingInsight}
+                            className="px-8 py-3 bg-zinc-800 hover:bg-indigo-600 text-white font-bold rounded-full text-xs uppercase tracking-widest transition-all shadow-lg hover:shadow-indigo-500/20"
+                        >
+                            {loadingInsight ? (
+                                <span className="flex items-center gap-2 justify-center">
+                                    <FaSpinner className="animate-spin" /> Dopočítávám data...
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-2 justify-center">
+                                    <FaRedo /> Doplnit kompletní analýzu
+                                </span>
+                            )}
+                        </button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <button
-                  onClick={() => handleGenerateInsight(activeTestCase)}
-                  disabled={loadingInsight}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700"
-                >
-                  {loadingInsight
-                    ? "Generuji Expert QA Insight…"
-                    : "Generovat Expert QA Insight"}
-                </button>
+                <div className="py-8 text-center">
+                    <p className="text-slate-400 text-sm mb-4">Expertní analýza není pro tento test k dispozici.</p>
+                    <button
+                    onClick={() => handleGenerateInsight(activeTestCase)}
+                    disabled={loadingInsight}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                    {loadingInsight
+                        ? "Generuji Expert QA Insight…"
+                        : "Generuj Expert QA Insight"}
+                    </button>
+                </div>
               )}
             </div>
           </div>
@@ -723,6 +780,14 @@ export default function TestScenariosPage() {
                         0 0 30px rgba(34,211,238,0.4);
             transform: scale(1);
           }
+        }
+        
+        @keyframes fade-in {
+            0% { opacity: 0; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
         }
       `}</style>
     </div>
