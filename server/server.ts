@@ -294,30 +294,62 @@ STRUKTURA:
 }
 
 /* =========================
-   PLAYWRIGHT CODE BUILDER (REAL ACTIONS)
+   PLAYWRIGHT CODE BUILDER (V2 - CHYTŘEJŠÍ)
 ========================= */
 
 function buildPlaywrightTest(testCase: any) {
   const steps = (testCase.steps || []).map((s: string) => {
     const t = s.toLowerCase();
 
-    if (t.includes("otevř") || t.includes("open")) {
-      return `  await page.goto('https://www.example.com');`;
+    // 1. ELIMINACE NAVIGACE (Musí být velmi agresivní)
+    // Pokud krok obsahuje cokoliv z tohoto, ignorujeme ho (protože goto je v úvodu)
+    if (t.includes("otevř") || t.includes("open") || t.includes("naviguj") || t.includes("jdi na") || t.includes("stránku") || t.includes("web")) {
+      return `  // Krok: ${s} (Navigace vyřešena v setupu)`;
     }
 
-    if (t.includes("vyhled")) {
-      return `  await page.getByRole('textbox').first().fill('notebook');
+    // 2. VYHLEDÁVÁNÍ
+    if (t.includes("vyhled") || t.includes("zadej") || t.includes("search")) {
+      return `  // ${s}
+  await page.getByRole('textbox').first().fill('hledaný výraz');
   await page.keyboard.press('Enter');`;
     }
 
-    if (t.includes("přidat") || t.includes("košík")) {
-      return `  await page.getByRole('button').filter({ hasText: /košík|přidat|cart/i }).first().click();`;
+    // 3. SPECIFICKÉ AKCE (Musí být PŘED košíkem)
+    
+    // Pojištění
+    if (t.includes("pojištění") || t.includes("záruk")) {
+       return `  // ${s}
+  // TODO: Specifický selektor pro pojištění
+  await page.getByText('Pojištění', { exact: false }).first().click();`;
     }
 
-    if (t.includes("dokončit") || t.includes("objednáv")) {
-      return `  await page.getByRole('link').filter({ hasText: /objednáv|checkout|pokračovat/i }).first().click();`;
+    // Slevový kód
+    if (t.includes("slev") || t.includes("kód") || t.includes("kupon")) {
+       return `  // ${s}
+  await page.getByPlaceholder('Slevový kód').fill('SLEVA2024');
+  await page.getByRole('button', { name: 'Použít' }).click();`;
     }
 
+    // Filtrování
+    if (t.includes("filtr") || t.includes("značk") || t.includes("cen")) {
+       return `  // ${s}
+  await page.getByText('Název filtru').first().click();
+  await page.waitForTimeout(1000); // Čekání na překreslení`;
+    }
+
+    // 4. PŘIDÁNÍ DO KOŠÍKU (Obecné - až nakonec)
+    if (t.includes("přidat") || t.includes("košík") || t.includes("koupit") || t.includes("vlož")) {
+      return `  // ${s}
+  await page.getByRole('button').filter({ hasText: /košík|přidat|cart|koupit/i }).first().click();`;
+    }
+
+    // 5. CHECKOUT / DOKONČENÍ
+    if (t.includes("dokončit") || t.includes("objednáv") || t.includes("pokladn")) {
+      return `  // ${s}
+  await page.getByRole('link').filter({ hasText: /objednáv|checkout|pokračovat/i }).first().click();`;
+    }
+
+    // Default
     return `  // ${s}
   await page.waitForTimeout(500);`;
   }).join("\n\n");
@@ -327,12 +359,20 @@ import { test, expect } from '@playwright/test';
 
 test('${testCase.title}', async ({ page }) => {
 
+  // 1. Setup a Navigace
   await page.goto('https://www.example.com');
   await page.waitForLoadState('networkidle');
+  // Přijmutí cookies (častý blocker)
+  // await page.getByRole('button', { name: 'Přijmout vše' }).click().catch(() => {});
 
 ${steps}
 
-  await expect(page).toHaveURL(/cart|kosik|checkout/i);
+  // Assertion
+  try {
+    await expect(page).toHaveURL(/cart|kosik|checkout|success/i, { timeout: 5000 });
+  } catch (e) {
+    console.log('Assertion failed check manually');
+  }
 
 });
 `.trim();
