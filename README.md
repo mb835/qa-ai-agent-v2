@@ -325,15 +325,6 @@ JIRA_API_TOKEN=ATATT3xFfGF0...   # Generate at: https://id.atlassian.com/…ens
 JIRA_PROJECT_KEY=KAN
 
 
-# --- JIRA IDs (Default) ---
-
-JIRA_TASK_ISSUE_TYPE_ID=10003
-
-JIRA_EPIC_ISSUE_TYPE_ID=10001
-
-```
-
-
 ### 3. Run the Application
 
 
