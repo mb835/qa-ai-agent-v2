@@ -154,7 +154,7 @@ graph TD
 ---
 
 
-## 📦 Core Capabilities & Output Structure
+## 📦 Output Structure
 
 
 Unlike generic chat bots, this engine enforces **strict structured outputs** suitable for professional QA workflows.
@@ -231,7 +231,7 @@ The engine acts as a "second pair of eyes," analyzing coverage and risks.
 ---
 
 
-## ✨ Key Features & Philosophy
+## ⚙️ Core Capabilities
 
 
 * 🚀 **Accelerates Test Design:** Reduces planning time by ~80%. Instantly creates comprehensive test plans from a single sentence.
