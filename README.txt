@@ -1,38 +1,13 @@
 # 🧠 QA Thinking Engine (AI-Powered Quality Intelligence)
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-MVP-success.svg)
-![Stack](https://img.shields.io/badge/stack-MERN-blueviolet)
+![License](https://img.shields.io/…vg)
+![Status](https://img.shields.io/…vg)
+![Stack](https://img.shields.io/…et)
 
 > **AI-assisted tool for QA test design, bridging the gap between vague intent and structured automation.**
 
 The **QA Thinking Engine** acts as a senior QA architect. It interprets natural language intents and transforms them into structured test scenarios, comprehensive test cases, risk analysis, and executable Playwright code skeletons.
 
-
----
-
-## ⚡ Why This Matters?
-
-Business and development teams often struggle with the "QA bottleneck." Here is how **QA Thinking Engine** compares to the traditional approach:
-
-| Feature | Traditional QA Design | **QA Thinking Engine** |
-| :--- | :--- | :--- |
-| **Design Time** | 2–4 Hours / Sprint | **< 1 Minute** |
-| **Risk Identification** | Subjective / Human Error | **Objective / AI-Powered Insight** |
-| **Code Output** | Manual implementation | **Instant Playwright Skeleton** |
-| **Jira Sync** | Manual ticket creation | **Automatic REST API Export** |
-
----
-
-## 🛡️ Security-First Approach: Expert QA Insight
-
-Unlike standard LLM prompts, this engine is instructed to look for **OWASP Top 10** vulnerabilities. It specifically flags critical risks to ensure quality from the very first draft:
-
-* **Vulnerability Detection:** Identifies missing validation for SQL Injection, XSS, and Broken Authentication in every test scenario.
-* **Strategic Rationale:** Every test is generated with a business context, explaining *why* the test is critical for the product's stability.
-* **AI Guardrails:** Uses **Advanced Prompt Chaining** to separate logical analysis from code generation, ensuring high accuracy and preventing AI hallucinations.
-
----
 ---
 
 ## 🏗️ High-Level Architecture
@@ -43,7 +18,7 @@ The application follows a clean separation of concerns, ensuring modularity betw
 graph TD
     A["User Intent (Natural Language)"] -->|Input| B("React Frontend")
     B -->|API Request| C{"Node.js Backend"}
-    C -->|Context & Prompt Engineering| D["OpenAI LLM (Configurable)"]
+    C -->|Context & Prompt Engineering| D["OpenAI GPT-4"]
     D -->|Structured JSON| C
     C -->|Response| B
     B --> E["Test Scenarios & Insight"]
@@ -117,22 +92,22 @@ The engine acts as a "second pair of eyes," analyzing coverage and risks.
 ## ✨ Key Features & Philosophy
 
 * **🤖 AI Test Strategy Generator:** Instantly creates comprehensive test plans from a single sentence.
-* **🇨🇿 Localized Output:** The engine is **optimized for Czech language output** by default (configurable via prompt settings), ensuring consistent documentation for local teams.
+* **🇨🇿 Czech Localization Enforced:** The engine is configured to **strictly output all scenarios in Czech**, ensuring consistent documentation for local teams regardless of the input language.
 * **🛡️ AI Guardrails:** Implements heuristic validators to minimize hallucinations and ensure the generated steps are logically sequential.
 * **⚖️ Risk-Based Approach:** Every test case includes a risk assessment to prioritize critical flows.
 * **🎭 Auto-Playwright:** Converts textual test steps into syntactically correct **Playwright (TypeScript)** code.
-* **🎫 JIRA Integration (Experimental):** Prototype feature for exporting scenarios directly to JIRA as Epics/Tasks.
+* **🎫 JIRA Integration:** One-click export of scenarios directly to JIRA as Epics/Tasks.
 
 ---
 
 ## 🛠️ Tech Stack
 
-![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
-![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![OpenAI](https://img.shields.io/badge/OpenAI-%23412991.svg?style=for-the-badge&logo=openai&logoColor=white)
-![Playwright](https://img.shields.io/badge/-Playwright-45ba4b?style=for-the-badge&logo=Playwright&logoColor=white)
+![React](https://img.shields.io/…FB)
+![TypeScript](https://img.shields.io/…te)
+![NodeJS](https://img.shields.io/…te)
+![TailwindCSS](https://img.shields.io/…te)
+![OpenAI](https://img.shields.io/…te)
+![Playwright](https://img.shields.io/…te)
 
 ---
 
@@ -150,7 +125,7 @@ The engine acts as a "second pair of eyes," analyzing coverage and risks.
 
 ```bash
 # 1. Clone repo
-git clone https://github.com/mb835/QA-Thinking-Engine.git
+git clone [https://github.com/…it)
 cd QA-Thinking-Engine
 
 # 2. Install Backend dependencies
@@ -170,9 +145,9 @@ Return to the root directory, create a `.env` file and update it with your crede
 OPENAI_API_KEY=sk-proj-xxxxxxxx...
 
 # --- JIRA Integration (Optional) ---
-JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_BASE_URL=[https://your-domain.atlassian.net](https:/…et)
 JIRA_EMAIL=your-email@example.com
-JIRA_API_TOKEN=ATATT3xFfGF0...   # Generate at: https://id.atlassian.com/manage-profile/security/api-tokens
+JIRA_API_TOKEN=ATATT3xFfGF0...   # Generate at: [https://id.atlassian.com/…ns)
 JIRA_PROJECT_KEY=KAN
 
 # --- JIRA IDs (Default) ---
@@ -201,26 +176,13 @@ npm run dev
 
 ---
 
+## 🔮 Roadmap
 
-
-
-## 🚀 Roadmap & Future Vision
-
-### ✅ Phase 1: Foundation (Implemented)
-* [x] **QA Design Engine:** Core Logic & AI Agent for requirement interpretation.
-* [x] **Playwright Export:** Automated TypeScript code generation for end-to-end testing.
-* [x] **JIRA Integration:** Seamless bridge between AI design and project management.
-
-### 🚀 Phase 2: Intelligence & Stability (Planned)
-* [ ] **Privacy-First Masking:** Implementation of PII (Personally Identifiable Information) masking to ensure sensitive data never leaves the local context during AI analysis.
-* [ ] **Contextual Awareness:** Integration with Confluence/Documentation to align tests with specific business logic.
-* [ ] **Self-Healing Scripts:** AI-driven updates for Playwright locators when the UI changes.
-* [ ] **Persistent Storage:** MongoDB integration for saving test history and user preferences.
-
-### 🛠️ Phase 3: Scaling & Automation (Planned)
-* [ ] **CI/CD Pipeline:** GitHub Actions integration for automated test execution.
-* [ ] **Synthetic Data Generation:** AI-powered creation of safe, anonymized test data for privacy compliance.
-* [ ] **Cloud Testing:** Integration with SauceLabs/BrowserStack for cross-browser validation.
+* [x] **QA Design Engine** (Core Logic)
+* [x] **Playwright Export** (Code Gen)
+* [ ] **CI/CD Pipeline** (GitHub Actions integration)
+* [ ] **JIRA Integration** (Direct export of issues)
+* [ ] **Strategy Profiles** (Switch between "Aggressive" vs "Standard" testing depth)
 
 ---
 
