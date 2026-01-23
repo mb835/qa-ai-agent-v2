@@ -6,11 +6,9 @@
 > **From vague intent to Playwright test in 30 seconds.**
 
 
-[![License](https://img.shields.io/…IT)
-
-![Status](https://img.shields.io/…vg)
-
-![Stack](https://img.shields.io/…et)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Stack](https://img.shields.io/badge/stack-OpenAI--GPT4-blue)
 
 
 ---
