@@ -1,4 +1,6 @@
-# 🚀 QA Thinking Engine ⚡ (AI-Powered Quality Intelligence)
+# 🚀 QA Thinking Engine ⚡ 
+
+**AI-Powered Quality Intelligence**
 
 **Intelligent Tool for Automated QA Strategy & Test Design**
 
