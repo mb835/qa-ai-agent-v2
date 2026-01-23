@@ -32,16 +32,11 @@ Instead of hours spent on manual writing, simply input a **test intent**, and th
 Business and development teams often struggle with the "QA bottleneck." Here is how **QA Thinking Engine** compares to the traditional approach:
 
 
-| Feature | Traditional QA Design | **QA Thinking Engine** |
-
+| Feature | Traditional QA Design | **QA Engine** |
 | :--- | :--- | :--- |
-
-| **Design Time** | 2–4 Hours / Sprint | **< 1 Minute** |
-
-| **Risk Identification** | Subjective / Human Error | **Objective / AI-Powered Insight** |
-
+| **Design Time** | 2-4 Hours / Sprint | **< 1 Minute** |
+| **Risk Identification** | Subjective / Human Error | **Objective / AI-Powered** |
 | **Code Output** | Manual implementation | **Instant Playwright Skeleton** |
-
 | **Jira Sync** | Manual ticket creation | **Automatic REST API Export** |
 
 
