@@ -5,7 +5,7 @@
 > **From vague intent to Playwright test in 30 seconds.**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Status](https://img.shields.io/badge/status-MVP-success.svg)
+![Status](https://img.shields.io/badge/status-PoC_(Proof_of_Concept)-orange.svg)
 ![Stack](https://img.shields.io/badge/stack-React_Node_AI-blueviolet)
 
 ---
