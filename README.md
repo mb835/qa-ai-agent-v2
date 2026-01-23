@@ -172,7 +172,7 @@ The engine acts as a "second pair of eyes," analyzing coverage and risks.
 
 ```bash
 # 1. Clone repo
-git clone [https://github.com/mb835/QA-Thinking-Engine.git](https://github.com/mb835/QA-Thinking-Engine.git)
+git clone https://github.com/mb835/QA-Thinking-Engine.git
 cd QA-Thinking-Engine
 
 # 2. Install Backend dependencies
