@@ -1,0 +1,1 @@
+Dobře, mohu vám připravit scénáře testování. Prosím, uveďte konkrétní funkci nebo požadavek, pro který chcete scénáře (happy path, edge cases, negative cases).

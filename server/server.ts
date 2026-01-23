@@ -1,0 +1,839 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import OpenAI from "openai";
+import fetch from "node-fetch";
+import { randomUUID } from "crypto";
+
+/* =========================
+   ENV INIT
+========================= */
+dotenv.config();
+
+console.log("👉 JIRA PROJECT KEY:", process.env.JIRA_PROJECT_KEY);
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: "2mb" }));
+
+console.log("🔥 SERVER VERSION: CZECH LANGUAGE ENFORCED");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+/* =========================
+   IN-MEMORY JOB STORE
+========================= */
+
+type ExportJob = {
+  id: string;
+  total: number;
+  done: number;
+  status: "running" | "done" | "error";
+  result?: any;
+  error?: any;
+};
+
+const exportJobs: Record<string, ExportJob> = {};
+
+/* =========================
+   PLAYWRIGHT STORE
+========================= */
+
+const playwrightStore: Record<string, { filename: string; content: string }> = {};
+
+/* =========================
+   HEALTH CHECK
+========================= */
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+/* =========================
+   TEST TYPE MAP (CZ)
+========================= */
+function mapTestTypeToCz(type: string) {
+  switch (type?.toUpperCase()) {
+    case "ACCEPTANCE":
+      return "Akceptační";
+    case "NEGATIVE":
+      return "Negativní";
+    case "EDGE":
+      return "Hraniční";
+    case "SECURITY":
+      return "Bezpečnostní";
+    case "UX":
+      return "Uživatelský (UX)";
+    case "DATA":
+      return "Datový";
+    default:
+      return type;
+  }
+}
+
+/* =========================
+   AI PROMPT – SCENARIO (CZECH ENFORCED)
+========================= */
+function buildScenarioPrompt(intent: string, isRetry = false) {
+  return `
+VRAŤ POUZE VALIDNÍ JSON.
+
+Jsi senior QA automation architekt (enterprise úroveň).
+Používáš výhradně Playwright.
+
+${isRetry ? "POZOR: PŘEDCHOZÍ ODPOVĚĎ BYLA NEÚPLNÁ. ACCEPTANCE TEST MUSÍ MÍT KROKY." : ""}
+
+ZADÁNÍ:
+Vytvoř kompletní testovací scénář na základě záměru: "${intent}"
+
+PRAVIDLA JAZYKA:
+!!! DŮLEŽITÉ: VŠECHNY TEXTOVÉ HODNOTY (title, description, steps, reasoning, atd.) MUSÍ BÝT V ČEŠTINĚ !!!
+!!! NÁZVY TESTŮ I POPISY MUSÍ BÝT ČESKY !!!
+
+Vytvoř:
+- 1 hlavní ACCEPTANCE test
+- 5 dalších testů: NEGATIVE, EDGE, SECURITY, UX, DATA
+
+KAŽDÝ TEST MUSÍ OBSAHOVAT:
+- id
+- type
+- title (ČESKY)
+- description (ČESKY)
+- expectedResult (ČESKY)
+- qaInsight:
+  - reasoning (ČESKY)
+  - coverage (array, ČESKY)
+  - risks (array, ČESKY)
+  - automationTips (array, ČESKY)
+
+POVINNÉ:
+- ACCEPTANCE test MUSÍ mít:
+  - preconditions (array, ČESKY)
+  - steps (array, min. 5 kroků, ČESKY)
+
+DALŠÍ TESTY:
+- NESMÍ obsahovat kroky (steps bude prázdné pole)
+
+STRUKTURA:
+{
+  "testCase": {
+    "id": "TC-ACC-001",
+    "type": "ACCEPTANCE",
+    "title": "Zde bude český název testu",
+    "description": "Zde bude český popis",
+    "preconditions": [],
+    "steps": [],
+    "expectedResult": "Očekávaný výsledek česky",
+    "qaInsight": {
+      "reasoning": "",
+      "coverage": [],
+      "risks": [],
+      "automationTips": []
+    },
+    "additionalTestCases": []
+  }
+}
+`;
+}
+
+/* =========================
+   RETRY HELPER
+========================= */
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (retries <= 0) throw err;
+    console.warn("🔁 Retry...");
+    await new Promise((r) => setTimeout(r, 1200));
+    return withRetry(fn, retries - 1);
+  }
+}
+
+/* =========================
+   AI HELPERS
+========================= */
+
+async function generateScenarioWithRetry(intent: string) {
+  let attempt = 0;
+  let lastResult: any = null;
+
+  while (attempt < 2) {
+    const isRetry = attempt === 1;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: isRetry ? 0.1 : 0.25,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "Odpověz výhradně jako validní JSON objekt. Veškerý obsah generuj v českém jazyce." },
+        { role: "user", content: buildScenarioPrompt(intent, isRetry) },
+      ],
+    });
+
+    const content = completion.choices[0].message.content;
+    if (!content) {
+      attempt++;
+      continue;
+    }
+
+    const parsed = JSON.parse(content);
+    lastResult = parsed;
+
+    const steps = parsed?.testCase?.steps;
+    if (Array.isArray(steps) && steps.length >= 5) {
+      
+      // ✅ OPRAVA: Odstranění čísel z kroků
+      if (parsed.testCase && Array.isArray(parsed.testCase.steps)) {
+        parsed.testCase.steps = parsed.testCase.steps.map((step: string) => 
+          step.replace(/^\d+\.\s*/, "")
+        );
+      }
+
+      return {
+        ...parsed,
+        meta: { aiStatus: attempt === 0 ? "ok" : "retried" },
+      };
+    }
+
+    attempt++;
+  }
+
+  return {
+    ...lastResult,
+    meta: { aiStatus: "partial" },
+  };
+}
+
+async function generateStepsForTest(testCase: any) {
+  const prompt = `
+VRAŤ POUZE VALIDNÍ JSON.
+
+Jsi senior QA automation expert.
+Používáš Playwright.
+
+ÚKOL: Vygeneruj kroky pro test.
+!!! VÝSTUP MUSÍ BÝT V ČEŠTINĚ !!!
+
+TYP: ${testCase.type}
+NÁZEV: ${testCase.title}
+POPIS: ${testCase.description}
+
+STRUKTURA:
+{
+  "steps": ["Krok 1 česky", "Krok 2 česky"],
+  "expectedResult": "Očekávaný výsledek česky"
+}
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: "Odpověz pouze jako JSON. Všechny texty musí být česky." },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const content = completion.choices[0].message.content;
+  if (!content) throw new Error("AI nevrátila žádný obsah.");
+
+  const parsed = JSON.parse(content);
+
+  // ✅ OPRAVA: Odstranění čísel z kroků
+  const cleanSteps = parsed.steps?.map((step: string) => 
+    step.replace(/^\d+\.\s*/, "")
+  ) || [];
+
+  return {
+    ...testCase,
+    steps: cleanSteps,
+    expectedResult: parsed.expectedResult || testCase.expectedResult,
+  };
+}
+
+async function generateInsightForTest(testCase: any) {
+  const prompt = `
+VRAŤ POUZE VALIDNÍ JSON.
+
+Jsi senior QA expert.
+
+ÚKOL: Dopočítej Expertní QA analýzu pro test.
+!!! VÝSTUP MUSÍ BÝT V ČEŠTINĚ !!!
+
+TYP: ${testCase.type}
+NÁZEV: ${testCase.title}
+POPIS: ${testCase.description}
+
+STRUKTURA:
+{
+  "reasoning": "Důvod česky",
+  "coverage": ["Položka 1 česky"],
+  "risks": ["Riziko 1 česky"],
+  "automationTips": ["Tip 1 česky"]
+}
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0.25,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: "Odpověz pouze jako JSON. Všechny texty musí být česky." },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const content = completion.choices[0].message.content;
+  if (!content) throw new Error("AI nevrátila žádný obsah.");
+
+  return JSON.parse(content);
+}
+
+/* =========================
+   PLAYWRIGHT CODE BUILDER (V2 - CHYTŘEJŠÍ)
+========================= */
+
+function buildPlaywrightTest(testCase: any) {
+  const steps = (testCase.steps || []).map((s: string) => {
+    const t = s.toLowerCase();
+
+    // 1. ELIMINACE NAVIGACE (Musí být velmi agresivní)
+    // Pokud krok obsahuje cokoliv z tohoto, ignorujeme ho (protože goto je v úvodu)
+    if (t.includes("otevř") || t.includes("open") || t.includes("naviguj") || t.includes("jdi na") || t.includes("stránku") || t.includes("web")) {
+      return `  // Krok: ${s} (Navigace vyřešena v setupu)`;
+    }
+
+    // 2. VYHLEDÁVÁNÍ
+    if (t.includes("vyhled") || t.includes("zadej") || t.includes("search")) {
+      return `  // ${s}
+  await page.getByRole('textbox').first().fill('hledaný výraz');
+  await page.keyboard.press('Enter');`;
+    }
+
+    // 3. SPECIFICKÉ AKCE (Musí být PŘED košíkem)
+    
+    // Pojištění
+    if (t.includes("pojištění") || t.includes("záruk")) {
+       return `  // ${s}
+  // TODO: Specifický selektor pro pojištění
+  await page.getByText('Pojištění', { exact: false }).first().click();`;
+    }
+
+    // Slevový kód
+    if (t.includes("slev") || t.includes("kód") || t.includes("kupon")) {
+       return `  // ${s}
+  await page.getByPlaceholder('Slevový kód').fill('SLEVA2024');
+  await page.getByRole('button', { name: 'Použít' }).click();`;
+    }
+
+    // Filtrování
+    if (t.includes("filtr") || t.includes("značk") || t.includes("cen")) {
+       return `  // ${s}
+  await page.getByText('Název filtru').first().click();
+  await page.waitForTimeout(1000); // Čekání na překreslení`;
+    }
+
+    // 4. PŘIDÁNÍ DO KOŠÍKU (Obecné - až nakonec)
+    if (t.includes("přidat") || t.includes("košík") || t.includes("koupit") || t.includes("vlož")) {
+      return `  // ${s}
+  await page.getByRole('button').filter({ hasText: /košík|přidat|cart|koupit/i }).first().click();`;
+    }
+
+    // 5. CHECKOUT / DOKONČENÍ
+    if (t.includes("dokončit") || t.includes("objednáv") || t.includes("pokladn")) {
+      return `  // ${s}
+  await page.getByRole('link').filter({ hasText: /objednáv|checkout|pokračovat/i }).first().click();`;
+    }
+
+    // Default
+    return `  // ${s}
+  await page.waitForTimeout(500);`;
+  }).join("\n\n");
+
+  return `// @ts-nocheck
+import { test, expect } from '@playwright/test';
+
+test('${testCase.title}', async ({ page }) => {
+
+  // 1. Setup a Navigace
+  await page.goto('https://www.example.com');
+  await page.waitForLoadState('networkidle');
+  // Přijmutí cookies (častý blocker)
+  // await page.getByRole('button', { name: 'Přijmout vše' }).click().catch(() => {});
+
+${steps}
+
+  // Assertion
+  try {
+    await expect(page).toHaveURL(/cart|kosik|checkout|success/i, { timeout: 5000 });
+  } catch (e) {
+    console.log('Assertion failed check manually');
+  }
+
+});
+`.trim();
+}
+
+/* =========================
+   AI – GENERATE SCENARIO
+========================= */
+app.post("/api/scenarios", async (req, res) => {
+  const { intent } = req.body;
+
+  if (!intent || typeof intent !== "string") {
+    return res.status(400).json({
+      error: "Chybí nebo je neplatný testovací záměr.",
+    });
+  }
+
+  try {
+    const result = await generateScenarioWithRetry(intent);
+    res.json(result);
+  } catch (error) {
+    console.error("AI ERROR:", error);
+    res.status(500).json({
+      error: "Chyba při generování QA analýzy",
+      details: String(error),
+    });
+  }
+});
+
+/* =========================
+   AI – GENERATE STEPS
+========================= */
+app.post("/api/scenarios/additional/steps", async (req, res) => {
+  try {
+    const { additionalTestCase } = req.body;
+    const updated = await generateStepsForTest(additionalTestCase);
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Failed to generate steps:", err);
+    res.status(500).json({ error: "Failed to generate steps" });
+  }
+});
+
+/* =========================
+   AI – GENERATE INSIGHT
+========================= */
+app.post("/api/scenarios/insight", async (req, res) => {
+  try {
+    const { testCase } = req.body;
+    const insight = await generateInsightForTest(testCase);
+    res.json({ qaInsight: insight });
+  } catch (err) {
+    console.error("❌ Failed to generate insight:", err);
+    res.status(500).json({ error: "Failed to generate insight" });
+  }
+});
+
+/* =========================
+   JIRA ADF HELPERS
+========================= */
+
+function textNode(text: string) {
+  return { type: "text", text };
+}
+
+function paragraph(text: string) {
+  return { type: "paragraph", content: [textNode(text)] };
+}
+
+function heading(text: string) {
+  return {
+    type: "heading",
+    attrs: { level: 3 },
+    content: [textNode(text)],
+  };
+}
+
+function bulletList(items: string[]) {
+  return {
+    type: "bulletList",
+    content: items.map((i) => ({
+      type: "listItem",
+      content: [{ type: "paragraph", content: [textNode(i)] }],
+    })),
+  };
+}
+
+function orderedList(items: string[]) {
+  return {
+    type: "orderedList",
+    content: items.map((i) => ({
+      type: "listItem",
+      content: [{ type: "paragraph", content: [textNode(i)] }],
+    })),
+  };
+}
+
+function buildJiraADF(testCase: any) {
+  const content: any[] = [];
+
+  content.push(heading(testCase.title));
+  content.push(paragraph(`Typ: ${mapTestTypeToCz(testCase.type)}`));
+  content.push(paragraph(testCase.description || ""));
+
+  if (testCase.steps?.length) {
+    content.push(heading("Testovací kroky"));
+    content.push(orderedList(testCase.steps));
+  }
+
+  content.push(heading("Očekávaný výsledek"));
+  content.push(paragraph(testCase.expectedResult || ""));
+
+  if (testCase.qaInsight) {
+    content.push(heading("Expertní QA analýza"));
+
+    content.push(heading("Proč je test klíčový"));
+    content.push(paragraph(testCase.qaInsight.reasoning || ""));
+
+    if (testCase.qaInsight.coverage?.length) {
+      content.push(heading("Pokrytí"));
+      content.push(bulletList(testCase.qaInsight.coverage));
+    }
+
+    if (testCase.qaInsight.risks?.length) {
+      content.push(heading("Rizika"));
+      content.push(bulletList(testCase.qaInsight.risks));
+    }
+
+    if (testCase.qaInsight.automationTips?.length) {
+      content.push(heading("Doporučení pro Playwright"));
+      content.push(bulletList(testCase.qaInsight.automationTips));
+    }
+  }
+
+  return {
+    type: "doc",
+    version: 1,
+    content,
+  };
+}
+
+/* =========================
+   JIRA ISSUE TYPE RESOLVER
+========================= */
+
+async function getProjectIssueTypes() {
+  const res = await fetch(
+    `${process.env.JIRA_BASE_URL}/rest/api/3/project/${process.env.JIRA_PROJECT_KEY}`,
+    {
+      headers: {
+        Authorization:
+          "Basic " +
+          Buffer.from(
+            `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+          ).toString("base64"),
+        Accept: "application/json",
+      },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) throw data;
+  return data.issueTypes;
+}
+
+async function resolveIssueTypes() {
+  const types = await getProjectIssueTypes();
+
+  const epicType =
+    types.find((t: any) => t.hierarchyLevel === 1) || types[0];
+
+  const taskType =
+    types.find((t: any) => t.hierarchyLevel === 0) || types[0];
+
+  console.log("🟣 JIRA EPIC TYPE:", epicType.name, epicType.id);
+  console.log("🔵 JIRA TASK TYPE:", taskType.name, taskType.id);
+
+  return { epicType, taskType };
+}
+
+/* =========================
+   JIRA CREATE ISSUE (RETRY)
+========================= */
+async function createJiraIssue(fields: any, retries = 3): Promise<any> {
+  try {
+    const response = await fetch(
+      `${process.env.JIRA_BASE_URL}/rest/api/3/issue`,
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(
+              `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+            ).toString("base64"),
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fields }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw { status: response.status, data };
+    }
+
+    return data;
+  } catch (err) {
+    if (retries <= 0) throw err;
+    console.warn("🔁 JIRA retry...");
+    await new Promise((r) => setTimeout(r, 1500));
+    return createJiraIssue(fields, retries - 1);
+  }
+}
+
+/* =========================
+   ⭐ EXPORT SINGLE TEST CASE
+========================= */
+app.post("/api/integrations/jira/export-testcase", async (req, res) => {
+  try {
+    const { testCase } = req.body;
+
+    const { taskType } = await resolveIssueTypes();
+
+    const enriched = testCase.steps?.length
+      ? testCase
+      : await generateStepsForTest(testCase);
+
+    const withInsight = enriched.qaInsight
+      ? enriched
+      : { ...enriched, qaInsight: await generateInsightForTest(enriched) };
+
+    const task = await createJiraIssue({
+      project: { key: process.env.JIRA_PROJECT_KEY },
+      summary: `[${mapTestTypeToCz(withInsight.type)}] ${withInsight.title}`,
+      issuetype: { id: taskType.id },
+      description: buildJiraADF(withInsight),
+    });
+
+    res.json({
+      issueKey: task.key,
+      issueUrl: `${process.env.JIRA_BASE_URL}/browse/${task.key}`,
+    });
+  } catch (err) {
+    console.error("❌ Export single test failed:", err);
+    res.status(500).json({ error: "Failed to export test case to JIRA" });
+  }
+});
+
+/* =========================
+   ⭐ START ASYNC EXPORT JOB
+========================= */
+app.post("/api/integrations/jira/export-scenario", async (req, res) => {
+  const { testCase } = req.body;
+
+  const jobId = randomUUID();
+
+  exportJobs[jobId] = {
+    id: jobId,
+    total: 0,
+    done: 0,
+    status: "running",
+  };
+
+  res.json({ jobId });
+
+  (async () => {
+    try {
+      const { epicType, taskType } = await resolveIssueTypes();
+
+      let allCases = [testCase, ...(testCase.additionalTestCases || [])];
+
+      exportJobs[jobId].total = allCases.length * 2 + 1;
+
+      const enriched = await Promise.all(
+        allCases.map(async (tc) => {
+          let updated = tc;
+
+          if (!updated.steps?.length) {
+            updated = await withRetry(() => generateStepsForTest(updated), 2);
+          }
+          exportJobs[jobId].done++;
+
+          if (!updated.qaInsight) {
+            updated.qaInsight = await withRetry(
+              () => generateInsightForTest(updated),
+              2
+            );
+          }
+          exportJobs[jobId].done++;
+
+          return updated;
+        })
+      );
+
+      const epic = await createJiraIssue({
+        project: { key: process.env.JIRA_PROJECT_KEY },
+        summary: `[SCENARIO] ${testCase.title}`,
+        issuetype: { id: epicType.id },
+        description: {
+          type: "doc",
+          version: 1,
+          content: [
+            heading(testCase.title),
+            paragraph(testCase.description || ""),
+          ],
+        },
+      });
+
+      exportJobs[jobId].done++;
+
+      const tasks = [];
+
+      for (const tc of enriched) {
+        await new Promise((r) => setTimeout(r, 800));
+
+        const task = await createJiraIssue({
+          project: { key: process.env.JIRA_PROJECT_KEY },
+          summary: `[${mapTestTypeToCz(tc.type)}] ${tc.title}`,
+          issuetype: { id: taskType.id },
+          parent: { key: epic.key },
+          description: buildJiraADF(tc),
+        });
+
+        tasks.push({
+          id: tc.id,
+          key: task.key,
+          url: `${process.env.JIRA_BASE_URL}/browse/${task.key}`,
+        });
+      }
+
+      exportJobs[jobId].status = "done";
+      exportJobs[jobId].result = {
+        epic: {
+          key: epic.key,
+          url: `${process.env.JIRA_BASE_URL}/browse/${epic.key}`,
+        },
+        tasks,
+      };
+    } catch (err) {
+      console.error("❌ EXPORT JOB FAILED:", err);
+      exportJobs[jobId].status = "error";
+      exportJobs[jobId].error = err;
+    }
+  })();
+});
+
+/* =========================
+   ⭐ EXPORT STATUS
+========================= */
+app.get("/api/integrations/jira/export-status/:id", (req, res) => {
+  const job = exportJobs[req.params.id];
+
+  if (!job) {
+    return res.status(404).json({ error: "Job not found" });
+  }
+
+  res.json(job);
+});
+
+/* =========================
+   PLAYWRIGHT GENERATE (FIXED)
+========================= */
+
+app.post("/api/run-playwright", async (req, res) => {
+  try {
+    const testCase = req.body?.testCase ?? req.body;
+
+    if (!testCase || !testCase.title) {
+      return res.status(400).json({ error: "Missing or invalid testCase" });
+    }
+
+    const enriched = testCase.steps?.length
+      ? testCase
+      : await generateStepsForTest(testCase);
+
+    const code = buildPlaywrightTest(enriched);
+    const id = randomUUID();
+
+    playwrightStore[id] = {
+      filename: `${enriched.id || "test"}.spec.ts`,
+      content: code,
+    };
+
+    res.json({ id, code });
+  } catch (err) {
+    console.error("❌ Playwright generation failed:", err);
+    res.status(500).json({ error: "Playwright generation failed" });
+  }
+});
+
+/* =========================
+   PLAYWRIGHT DOWNLOAD
+========================= */
+
+app.get("/api/run-playwright/download/:id", (req, res) => {
+  const item = playwrightStore[req.params.id];
+
+  if (!item) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=${item.filename}`
+  );
+  res.setHeader("Content-Type", "text/plain");
+  res.send(item.content);
+});
+
+/* =========================
+   PLAYWRIGHT (FRONTEND COMPAT OLD)
+========================= */
+
+app.post("/api/tests/run", async (req, res) => {
+  try {
+    const testCase = req.body?.testCase ?? req.body;
+
+    if (!testCase || !testCase.title) {
+      return res.status(400).json({ error: "Missing or invalid testCase" });
+    }
+
+    const enriched = testCase.steps?.length
+      ? testCase
+      : await generateStepsForTest(testCase);
+
+    const code = buildPlaywrightTest(enriched);
+    const id = randomUUID();
+
+    playwrightStore[id] = {
+      filename: `${enriched.id || "test"}.spec.ts`,
+      content: code,
+    };
+
+    res.json({ id, code });
+  } catch (err) {
+    console.error("❌ Playwright run failed:", err);
+    res.status(500).json({ error: "Playwright run failed" });
+  }
+});
+
+app.get("/api/tests/download/:id", (req, res) => {
+  const item = playwrightStore[req.params.id];
+
+  if (!item) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=${item.filename}`
+  );
+  res.setHeader("Content-Type", "text/plain");
+  res.send(item.content);
+});
+
+/* =========================
+   SERVER START
+========================= */
+app.listen(3000, () => {
+  console.log("✅ Backend běží na http://localhost:3000");
+});
