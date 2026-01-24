@@ -2,8 +2,6 @@
 
 **AI-assisted Risk-Based Test Design Tool**
 
-**Structured QA analysis and Playwright skeleton generation**
-
 > **From test intent → structured scenarios → Playwright-ready skeletons**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
