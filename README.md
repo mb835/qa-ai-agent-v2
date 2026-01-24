@@ -16,8 +16,7 @@
 
 **QA Thinking Engine** solves the "blank page" problem in software testing. It combines the power of **OpenAI (GPT-4)** with structured QA engineering principles.
 
-Instead of hours spent on manual writing, simply input a **test intent**, and the application acts as a senior architect to generate a complete strategy: from acceptance criteria and edge cases to production-ready automation code.
-
+Instead of hours spent on manual writing, simply input a test intent, and the application structures risk driven analysis, test scenarios, and Playwright ready automation skeletons.
 ---
 
 ## ⚡ Why This Matters?
