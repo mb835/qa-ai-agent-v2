@@ -2,7 +2,7 @@
 
 **AI-Powered Quality Intelligence**
 
-**Intelligent Tool for Automated QA Strategy & Test Design**
+**Intelligent Tool for Risk-Driven Test Design & Playwright Automation**
 
 > **From vague intent to Playwright test in 30 seconds.**
 
