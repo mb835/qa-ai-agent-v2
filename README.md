@@ -65,7 +65,7 @@ graph TD
 ## 📸 Application Preview
 
 ### 1. 📊 QA Dashboard
-*Real-time overview of test coverage, automation status, and recent execution metrics. The dashboard serves as the command center for all QA activities.*
+*Visual dashboard showcasing the future direction of QA metrics and system observability. Currently driven by mock data for UI validation and prototyping.*
 ![Dashboard View](./docs/Dashboard.png)
 
 ### 2. 🎬 Workflow: Intent to Structure
