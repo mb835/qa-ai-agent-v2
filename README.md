@@ -139,7 +139,7 @@ The engine acts as a "second pair of eyes," analyzing coverage and risks.
 
 ---
 
-## ⚙️ Core Capabilities
+##  Core Capabilities
 
 *  **Accelerated Test Design & Automation:** From intent to Playwright skeletons in seconds.
 *  **Complex Flow Fidelity:** Handles large scenarios (20+ steps) with strict adherence to Acceptance Criteria.
