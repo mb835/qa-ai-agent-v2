@@ -37,7 +37,6 @@ Unlike standard LLM prompts, this engine is instructed to look for **OWASP Top 1
 
 * **Vulnerability Detection:** Identifies missing validation for SQL Injection, XSS, and Broken Authentication in every test scenario.
 * **Strategic Rationale:** Every test is generated with a business context, explaining *why* the test is critical for the product's stability.
-* **AI Guardrails:** Uses **Advanced Prompt Chaining** to separate logical analysis from code generation, ensuring high accuracy and preventing AI hallucinations.
 
 ---
 
