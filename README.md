@@ -33,10 +33,17 @@ Business and development teams often struggle with the "QA bottleneck." Here is 
 
 ## 🛡️ Security-First Approach: Expert QA Insight
 
-Unlike standard LLM prompts, this engine is instructed to look for **OWASP Top 10** vulnerabilities. It specifically flags critical risks to ensure quality from the very first draft:
+The engine incorporates security and validation awareness inspired by common OWASP Top 10 risk areas.
 
-* **Vulnerability Detection:** Identifies missing validation for SQL Injection, XSS, and Broken Authentication in every test scenario.
-* **Strategic Rationale:** Every test is generated with a business context, explaining *why* the test is critical for the product's stability.
+During scenario analysis, it highlights potential gaps or missing validation related to:
+- CSRF protection
+- SQL Injection
+- Cross-Site Scripting (XSS)
+- Authentication and authorization risks
+
+This helps testers systematically consider security and abuse risks already during test design — not only during later security testing phases.
+
+In addition, each generated test includes a clear business and risk rationale explaining *why* the test is important for product stability and quality.
 
 ---
 
